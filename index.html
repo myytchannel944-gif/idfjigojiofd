@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Community Report System</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 20px; background: #f4f4f4; }
+  h1, h2 { color: #333; }
+  textarea, input { width: 100%; padding: 10px; margin: 5px 0; }
+  button { padding: 8px 12px; margin: 5px; cursor: pointer; }
+  .report { border: 1px solid #ccc; padding: 10px; margin: 10px 0; background: #fff; border-radius: 5px; }
+  .comment { margin-left: 20px; background: #eef; padding: 5px; border-radius: 4px; margin-top: 5px; }
+  .badge { background: green; color: white; padding: 2px 6px; border-radius: 4px; font-size: 12px; margin-right: 5px; }
+  #adminPanel { border: 2px solid #333; padding: 15px; background: #ddd; border-radius: 6px; margin-top: 20px; display: none; }
+  select { padding: 5px; }
+</style>
+</head>
+<body>
+
+<h1>Community Report System</h1>
+
+<!-- Report submission -->
+<h2>Submit a Report</h2>
+<textarea id="reportInput" placeholder="Write your report..." rows="4"></textarea><br>
+<button onclick="submitReport()">Send Report</button>
+
+<hr>
+
+<!-- Reports list -->
+<h2>Reports</h2>
+<div id="reports"></div>
+
+<hr>
+
+<!-- Admin login & panel -->
+<h2>Admin Panel</h2>
+<input type="password" id="adminCode" placeholder="Enter admin code">
+<button onclick="loginAdmin()">Login</button>
+
+<div id="adminPanel">
+  <h3>Admin Controls</h3>
+  <button onclick="markSelected('in progress')">Mark Selected as In Progress</button>
+  <button onclick="markSelected('resolved')">Mark Selected as Resolved</button>
+  <button onclick="deleteSelected()">Delete Selected Reports</button>
+</div>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<script>
+  // ===== Firebase Config =====
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+    databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT_ID.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  let isAdmin = false;
+  const supportUsers = ["support1", "support2"]; // Add verified support usernames
+
+  // ====== User Functions ======
+  function submitReport() {
+    const text = document.getElementById("reportInput").value.trim();
+    if (!text) return alert("Write something first!");
+    const username = prompt("Enter your username:").trim() || "Anonymous";
+    const isSupport = supportUsers.includes(username);
+
+    const newReportRef = db.ref('reports').push();
+    newReportRef.set({
+      id: newReportRef.key,
+      text: text,
+      status: "open",
+      comments: [],
+      username: username,
+      support: isSupport
+    });
+
+    document.getElementById("reportInput").value = "";
+  }
+
+  // Listen for changes in database
+  db.ref('reports').on('value', snapshot => {
+    const data = snapshot.val();
+    renderReports(data);
+  });
+
+  function renderReports(data) {
+    const container = document.getElementById("reports");
+    container.innerHTML = "";
+
+    if(!data) return;
+
+    Object.values(data).forEach(r => {
+      const reportDiv = document.createElement("div");
+      reportDiv.className = "report";
+      reportDiv.id = "r" + r.id;
+
+      let statusColor = "#000";
+      if(r.status === "in progress") statusColor = "orange";
+      if(r.status === "resolved") statusColor = "green";
+
+      reportDiv.innerHTML = `
+        <input type="checkbox" class="selectReport" data-id="${r.id}" style="display:${isAdmin ? 'inline-block' : 'none'}">
+        <b>Report by ${r.username}</b> — <i style="color:${statusColor}">Status: ${r.status}</i><br>
+        ${r.text}<br>
+        <button onclick="addComment('${r.id}')">Comment</button>
+        <div id="comments${r.id}"></div>
+      `;
+
+      container.appendChild(reportDiv);
+
+      const commentsDiv = document.getElementById("comments"+r.id);
+      commentsDiv.innerHTML = "";
+      (r.comments || []).forEach(c => {
+        const commentDiv = document.createElement("div");
+        commentDiv.className = "comment";
+        commentDiv.innerHTML = `${c.support ? '<span class="badge">Support</span>' : ''}${c.text} <i>- ${c.username}</i>`;
+        commentsDiv.appendChild(commentDiv);
+      });
+    });
+  }
+
+  function addComment(reportId) {
+    const text = prompt("Write your comment:").trim();
+    if (!text) return;
+
+    const username = prompt("Enter your username:").trim() || "Anonymous";
+    const isSupport = supportUsers.includes(username);
+
+    const comment = { text: text, username: username, support: isSupport };
+
+    db.ref(`reports/${reportId}/comments`).once('value').then(snapshot => {
+      const comments = snapshot.val() || [];
+      comments.push(comment);
+      db.ref(`reports/${reportId}/comments`).set(comments);
+    });
+  }
+
+  // ====== Admin Functions ======
+  function loginAdmin() {
+    const code = document.getElementById("adminCode").value;
+    if(code === "6118") {
+      isAdmin = true;
+      document.getElementById("adminPanel").style.display = "block";
+      alert("Admin access granted!");
+    } else {
+      alert("Wrong admin code!");
+    }
+  }
+
+  function getSelectedReports() {
+    const checkboxes = document.querySelectorAll(".selectReport");
+    const selectedIds = Array.from(checkboxes)
+      .filter(cb => cb.checked)
+      .map(cb => cb.dataset.id);
+    return selectedIds;
+  }
+
+  function markSelected(status) {
+    if(!isAdmin) return alert("Admin access required!");
+    const selectedIds = getSelectedReports();
+    selectedIds.forEach(id => {
+      db.ref(`reports/${id}/status`).set(status);
+    });
+  }
+
+  function deleteSelected() {
+    if(!isAdmin) return alert("Admin access required!");
+    const selectedIds = getSelectedReports();
+    selectedIds.forEach(id => {
+      db.ref(`reports/${id}`).remove();
+    });
+  }
+</script>
+
+</body>
+</html>
