@@ -2,160 +2,69 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>TSG Support Dashboard</title>
+<title>TSG Support</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 
 <style>
-* {
-  margin:0;
-  padding:0;
-  box-sizing:border-box;
-  font-family:'Inter', sans-serif;
-}
-
-body {
-  display:flex;
-  background:#0b0f1a;
-  color:white;
-}
-
-/* SIDEBAR */
-.sidebar {
-  width:240px;
-  height:100vh;
-  background:#0f1424;
-  padding:20px;
-}
-
-.sidebar h2 {
-  margin-bottom:20px;
-}
-
-.sidebar button {
-  width:100%;
-  margin:5px 0;
-  padding:10px;
-  background:#12172b;
-  border:none;
-  color:white;
-  border-radius:8px;
-  cursor:pointer;
-}
-
-.sidebar button:hover {
-  background:#5865F2;
-}
-
-/* MAIN */
-.main {
-  flex:1;
-  padding:20px;
-  overflow:auto;
-}
-
-.topbar {
-  display:flex;
-  justify-content:space-between;
-  margin-bottom:20px;
-}
-
-.card {
-  background:#12172b;
-  padding:20px;
-  border-radius:15px;
-  margin-bottom:15px;
-  transition:0.2s;
-}
-
-.card:hover {
-  transform:translateY(-4px);
-}
-
-input, textarea, select {
-  width:100%;
-  padding:10px;
-  margin:6px 0;
-  background:#0f1424;
-  border:none;
-  color:white;
-  border-radius:8px;
-}
-
-button.mainbtn {
-  background:#5865F2;
-  border:none;
-  padding:10px;
-  width:100%;
-  border-radius:8px;
-  cursor:pointer;
-}
-
-.status {
-  font-size:12px;
-  padding:4px 8px;
-  border-radius:6px;
-  display:inline-block;
-}
-
-.open { background:red; }
-.progress { background:orange; }
-.done { background:green; }
-
-.comment {
-  background:#0f1424;
-  padding:8px;
-  border-radius:8px;
-  margin-top:6px;
-}
-
-.badge {
-  background:#5865F2;
-  padding:2px 6px;
-  font-size:10px;
-  border-radius:6px;
-  margin-left:5px;
-}
-
-/* PAGES */
-.page {
-  display:none;
-}
-
-.active {
-  display:block;
-}
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',sans-serif;}
+body{display:flex;background:#0b0f1a;color:white;}
+.sidebar{width:230px;height:100vh;background:#0f1424;padding:20px;}
+.sidebar h2{margin-bottom:20px;}
+.sidebar button{width:100%;margin:5px 0;padding:10px;background:#12172b;border:none;color:white;border-radius:8px;cursor:pointer;}
+.sidebar button:hover{background:#5865F2;}
+.main{flex:1;padding:20px;overflow:auto;}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;}
+.online{color:#57F287;}
+.card{background:#12172b;padding:20px;border-radius:15px;margin-bottom:15px;transition:0.3s;animation:fadeIn 0.4s;}
+.card:hover{transform:translateY(-5px);}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+input,textarea,select{width:100%;padding:10px;margin:6px 0;background:#0f1424;border:none;color:white;border-radius:8px;}
+.mainbtn{background:#5865F2;border:none;padding:10px;width:100%;border-radius:8px;cursor:pointer;}
+.status{padding:4px 8px;border-radius:6px;font-size:12px;}
+.open{background:red;}
+.progress{background:orange;}
+.done{background:green;}
+.comment{background:#0f1424;padding:8px;border-radius:8px;margin-top:6px;}
+.badge{background:#5865F2;padding:2px 6px;font-size:10px;border-radius:6px;margin-left:5px;}
+.page{display:none;}
+.active{display:block;}
+.toast{position:fixed;bottom:20px;right:20px;background:#5865F2;padding:12px 20px;border-radius:10px;animation:slide 0.3s;}
+@keyframes slide{from{transform:translateX(100px);opacity:0;}to{transform:translateX(0);opacity:1;}}
 </style>
 </head>
 
 <body>
 
-<!-- SIDEBAR -->
 <div class="sidebar">
   <h2>TSG</h2>
   <button onclick="showPage('dashboard')">Dashboard</button>
-  <button onclick="showPage('create')">Create Report</button>
-  <button onclick="openAdmin()">Admin</button>
+  <button onclick="showPage('create')">Create</button>
+  <button onclick="showPage('stats')">Stats</button>
+  <button onclick="adminLogin()">Admin</button>
 </div>
 
-<!-- MAIN -->
 <div class="main">
 
 <div class="topbar">
   <h1>Support System</h1>
+  <span class="online">● Support Online</span>
 </div>
 
-<!-- DASHBOARD -->
-<div id="dashboard" class="page active">
-  <div id="reports"></div>
+<div id="login" class="card">
+  <h2>Login</h2>
+  <input id="username" placeholder="Enter username">
+  <button class="mainbtn" onclick="login()">Continue</button>
 </div>
 
-<!-- CREATE -->
+<div id="dashboard" class="page"></div>
+
 <div id="create" class="page">
   <div class="card">
     <h2>Create Report</h2>
     <input id="name" placeholder="Your name">
+    <input id="search" placeholder="Search reports..." oninput="filterReports()">
     <select id="type">
       <option>Bug</option>
       <option>Report</option>
@@ -166,118 +75,160 @@ button.mainbtn {
   </div>
 </div>
 
+<div id="stats" class="page">
+  <div class="card">
+    <h2>Stats</h2>
+    <p id="total"></p>
+    <p id="open"></p>
+    <p id="resolved"></p>
+  </div>
 </div>
+
+</div>
+
+<div id="toast"></div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getDatabase, ref, push, onValue, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-/* 🔥 PUT YOUR FIREBASE CONFIG HERE */
+/* 🔥 YOUR FIREBASE CONFIG (FILLED) */
 const firebaseConfig = {
-  apiKey: "PASTE",
-  authDomain: "PASTE",
-  databaseURL: "PASTE",
-  projectId: "PASTE",
-  storageBucket: "PASTE",
-  messagingSenderId: "PASTE",
-  appId: "PASTE"
+  apiKey: "AIzaSyCPIfra8YuSnh9C5NbglpRdg4KE5aigHDI",
+  authDomain: "support-32682.firebaseapp.com",
+  databaseURL: "https://support-32682-default-rtdb.firebaseio.com",
+  projectId: "support-32682",
+  storageBucket: "support-32682.firebasestorage.app",
+  messagingSenderId: "911974697786",
+  appId: "1:911974697786:web:ac226eb90c19af72dbde03"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-/* NAVIGATION */
-window.showPage = function(page){
-  document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
-  document.getElementById(page).classList.add("active");
+let admin=false;
+let user="";
+let allReports=[];
+
+window.showPage=(p)=>{
+  document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));
+  document.getElementById(p).classList.add("active");
 }
 
-/* CREATE REPORT */
-window.createReport = function(){
-  const name = document.getElementById("name").value;
-  const type = document.getElementById("type").value;
-  const message = document.getElementById("message").value;
+window.login=()=>{
+  user=document.getElementById("username").value;
+  document.getElementById("login").style.display="none";
+  showPage("dashboard");
+  toast("Logged in as "+user);
+}
 
-  push(ref(db,"reports"), {
-    name,type,message,
-    status:"open"
+window.adminLogin=()=>{
+  let code=prompt("Admin code");
+  if(code==="6118"){
+    admin=true;
+    toast("Admin mode enabled");
+  }
+}
+
+window.createReport=()=>{
+  const name=document.getElementById("name").value;
+  const type=document.getElementById("type").value;
+  const message=document.getElementById("message").value;
+
+  push(ref(db,"reports"),{
+    name,type,message,status:"open"
   });
 
-  alert("Report submitted!");
+  toast("Report created");
 }
 
-/* LOAD REPORTS */
-const container = document.getElementById("reports");
+onValue(ref(db,"reports"),snap=>{
+  allReports=[];
+  let total=0, open=0, done=0;
 
-onValue(ref(db,"reports"), snap=>{
-  container.innerHTML="";
   snap.forEach(child=>{
-    const data = child.val();
-    const id = child.key;
+    const d=child.val();
+    d.id=child.key;
+    allReports.push(d);
 
-    let html = `
-    <div class="card">
-      <h3>${data.type}</h3>
-      <p>${data.message}</p>
-      <small>by ${data.name}</small><br><br>
+    total++;
+    if(d.status==="open") open++;
+    if(d.status==="done") done++;
+  });
 
-      <span class="status ${data.status}">${data.status}</span>
-    `;
+  document.getElementById("total").innerText="Total: "+total;
+  document.getElementById("open").innerText="Open: "+open;
+  document.getElementById("resolved").innerText="Resolved: "+done;
+
+  render(allReports);
+});
+
+function render(list){
+  const container=document.getElementById("dashboard");
+  container.innerHTML="";
+
+  list.forEach(d=>{
+    let html=`<div class="card">
+      <h3>${d.type}</h3>
+      <p>${d.message}</p>
+      <small>${d.name}</small><br><br>
+      <span class="status ${d.status}">${d.status}</span>`;
 
     if(admin){
-      html += `
+      html+=`
       <br><br>
-      <button onclick="setStatus('${id}','progress')">In Progress</button>
-      <button onclick="setStatus('${id}','done')">Resolved</button>
-      `;
+      <button onclick="setStatus('${d.id}','progress')">Progress</button>
+      <button onclick="setStatus('${d.id}','done')">Done</button>`;
     }
 
-    html += `<div>`;
+    html+=`<div>`;
 
-    if(data.comments){
-      Object.values(data.comments).forEach(c=>{
-        html += `
-        <div class="comment">
+    if(d.comments){
+      Object.values(d.comments).forEach(c=>{
+        html+=`<div class="comment">
           ${c.text} - ${c.user}
           ${c.support ? '<span class="badge">SUPPORT</span>' : ''}
         </div>`;
       });
     }
 
-    html += `
-      <input id="c_${id}" placeholder="Comment">
-      <button onclick="addComment('${id}')">Send</button>
+    html+=`
+    <input id="c_${d.id}" placeholder="Comment">
+    <button onclick="comment('${d.id}')">Send</button>
     </div></div>`;
 
-    container.innerHTML += html;
+    container.innerHTML+=html;
   });
-});
-
-/* ADMIN */
-let admin=false;
-
-window.openAdmin = function(){
-  const code = prompt("Enter admin code");
-  if(code==="6118"){
-    admin=true;
-    alert("Admin unlocked");
-  }
 }
 
-/* STATUS */
-window.setStatus = function(id,status){
-  update(ref(db,"reports/"+id), {status});
+window.filterReports=()=>{
+  let q=document.getElementById("search").value.toLowerCase();
+  render(allReports.filter(r=>r.message.toLowerCase().includes(q)));
 }
 
-/* COMMENTS */
-window.addComment = function(id){
-  const text = document.getElementById("c_"+id).value;
+window.setStatus=(id,s)=>{
+  update(ref(db,"reports/"+id),{status:s});
+  toast("Updated");
+}
+
+window.comment=(id)=>{
+  const text=document.getElementById("c_"+id).value;
 
   push(ref(db,"reports/"+id+"/comments"),{
     text,
-    user: admin ? "Support" : "User",
-    support: admin
+    user:user,
+    support:admin
   });
+
+  toast("Comment sent");
+}
+
+function toast(msg){
+  const t=document.createElement("div");
+  t.className="toast";
+  t.innerText=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),2000);
 }
 </script>
 
