@@ -2,202 +2,278 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>TSG Support Dashboard PRO</title>
+<title>TSG Support</title>
 
-<!-- Firebase (cache-busted with ?v timestamp) -->
-<script>
-const fbVersion = Date.now(); // forces fresh load every time
-document.write('<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js?v='+fbVersion+'"><\/script>');
-document.write('<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js?v='+fbVersion+'"><\/script>');
-</script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
-<!-- Fonts & Icons -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
 <style>
-:root {
-  --primary:#3b82f6;
-  --bg:#0f172a;
-  --card:#1e293b;
-  --hover:#334155;
-  --text:#fff;
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:Inter;background:#0b1120;color:#fff}
+
+.sidebar{
+ position:fixed;width:240px;height:100%;
+ background:#020617;padding:20px;
 }
-body { margin:0; font-family:'Inter',sans-serif; background:var(--bg); color:var(--text); }
-.sidebar { width:220px; height:100vh; background:#020617; position:fixed; padding:20px; display:flex; flex-direction:column; }
-.sidebar h2 { margin-bottom:20px; font-weight:600; }
-.sidebar button { display:flex; align-items:center; gap:10px; width:100%; margin:10px 0; padding:10px; background:var(--card); border:none; color:white; cursor:pointer; border-radius:8px; font-weight:600; transition: all 0.2s; }
-.sidebar button:hover { background:var(--hover); transform:translateX(5px); }
-.main { margin-left:240px; padding:20px; transition: all 0.3s; }
-.card { background:var(--card); padding:15px; border-radius:12px; margin-bottom:15px; transition: transform 0.2s, box-shadow 0.2s; }
-.card:hover { transform: translateY(-3px); box-shadow:0 4px 20px rgba(0,0,0,0.4); }
-input, textarea { width:100%; padding:10px; margin:5px 0; border-radius:8px; border:none; }
-button.action { background:var(--primary); border:none; padding:8px 12px; color:white; border-radius:6px; cursor:pointer; font-weight:600; transition: all 0.2s; }
-button.action:hover { background:#2563eb; transform:translateY(-2px); }
-.status-open { color:#ef4444; font-weight:600; }
-.status-progress { color:#f59e0b; font-weight:600; }
-.status-resolved { color:#22c55e; font-weight:600; }
-.badge { background:#22c55e; padding:2px 6px; border-radius:6px; font-size:12px; margin-left:5px; }
-.comment { margin-left:15px; background:#334155; padding:5px; border-radius:8px; margin-top:5px; animation: fadeIn 0.5s ease; }
-@keyframes fadeIn { from { opacity:0; transform:translateY(5px);} to { opacity:1; transform:translateY(0);} }
-.notification { position:fixed; top:20px; right:20px; background:var(--primary); padding:10px 15px; border-radius:8px; color:white; box-shadow:0 4px 15px rgba(0,0,0,0.5); animation: slideIn 0.5s forwards; opacity:0; }
-@keyframes slideIn { to { opacity:1; transform:translateX(0);} from { opacity:0; transform:translateX(50px);} }
+.logo{font-size:20px;font-weight:600;margin-bottom:25px}
+
+.nav button{
+ width:100%;padding:12px;margin-bottom:8px;
+ border:none;background:none;color:#94a3b8;
+ border-radius:8px;text-align:left;cursor:pointer;
+}
+.nav button.active,.nav button:hover{
+ background:#1e293b;color:#fff;
+}
+
+.main{margin-left:240px;padding:25px;animation:fade 0.4s}
+
+.header{font-size:26px;margin-bottom:20px}
+
+.grid{
+ display:grid;
+ grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+ gap:15px;margin-bottom:20px;
+}
+
+.stat{
+ background:#1e293b;padding:15px;border-radius:12px;
+ text-align:center;
+}
+
+.card{
+ background:#1e293b;padding:20px;border-radius:12px;
+ margin-bottom:15px;transition:.2s;
+}
+.card:hover{transform:translateY(-4px)}
+
+input,textarea{
+ width:100%;padding:12px;margin-top:10px;
+ border:none;border-radius:8px;
+ background:#0f172a;color:white;
+}
+
+button{
+ margin-top:10px;padding:10px;
+ border:none;border-radius:8px;
+ background:#3b82f6;color:white;
+ cursor:pointer;
+}
+
+.status{font-weight:600}
+.open{color:#ef4444}
+.progress{color:#f59e0b}
+.resolved{color:#22c55e}
+
+.badge{
+ background:#22c55e;
+ padding:3px 8px;
+ border-radius:6px;
+ font-size:12px;
+ margin-left:6px;
+}
+
+.comment{
+ background:#0f172a;
+ margin-top:6px;
+ padding:6px;
+ border-radius:6px;
+}
+
+.toast{
+ position:fixed;
+ bottom:20px;
+ right:20px;
+ background:#3b82f6;
+ padding:10px 15px;
+ border-radius:8px;
+ opacity:0;
+ transition:.3s;
+}
+
+@keyframes fade{
+ from{opacity:0;transform:translateY(10px)}
+ to{opacity:1}
+}
 </style>
 </head>
+
 <body>
 
 <div class="sidebar">
-  <h2><i class="fas fa-headset"></i> TSG Support</h2>
-  <button onclick="showPage('home')"><i class="fas fa-home"></i> Home</button>
-  <button onclick="showPage('reports')"><i class="fas fa-clipboard-list"></i> Reports</button>
-  <button onclick="showPage('admin')"><i class="fas fa-user-shield"></i> Admin</button>
+ <div class="logo">TSG Support</div>
+
+ <div class="nav">
+  <button onclick="nav('home',this)" class="active">Dashboard</button>
+  <button onclick="nav('reports',this)">Reports</button>
+  <button onclick="nav('admin',this)">Admin</button>
+ </div>
 </div>
 
 <div class="main">
 
+<!-- HOME -->
 <div id="home">
-  <h1>Dashboard</h1>
-  <div class="card">
-    <h3>Submit a Report</h3>
-    <input id="username" placeholder="Username">
-    <textarea id="reportText" placeholder="Describe your issue..."></textarea>
-    <button class="action" onclick="submitReport()">Submit <i class="fas fa-paper-plane"></i></button>
-  </div>
+ <div class="header">Dashboard</div>
+
+ <div class="grid">
+  <div class="stat" id="total">Total: 0</div>
+  <div class="stat" id="open">Open: 0</div>
+  <div class="stat" id="resolved">Resolved: 0</div>
+ </div>
+
+ <div class="card">
+  <h3>Create Report</h3>
+  <input id="user" placeholder="Username">
+  <textarea id="text" placeholder="Describe issue"></textarea>
+  <button onclick="submit()">Submit</button>
+ </div>
 </div>
 
-<div id="reports" style="display:none;">
-  <h1>Reports</h1>
-  <div id="reportList"></div>
+<!-- REPORTS -->
+<div id="reports" style="display:none">
+ <div class="header">Reports</div>
+ <div id="list"></div>
 </div>
 
-<div id="admin" style="display:none;">
-  <h1>Admin Panel</h1>
-  <input id="adminCode" placeholder="Enter admin code">
-  <button class="action" onclick="loginAdmin()">Login <i class="fas fa-key"></i></button>
-  <div id="adminControls" style="display:none; margin-top:10px;">
-    <p><i class="fas fa-check-circle"></i> Admin Access Granted</p>
-  </div>
+<!-- ADMIN -->
+<div id="admin" style="display:none">
+ <div class="header">Admin</div>
+ <input id="code" placeholder="Enter admin code">
+ <button onclick="login()">Login</button>
+ <div id="adminBox" style="display:none">Admin Enabled</div>
 </div>
 
 </div>
 
-<div id="notify" class="notification" style="display:none;"></div>
+<div id="toast" class="toast"></div>
 
 <script>
-// ===== FIREBASE CONFIG =====
+// Firebase
 const firebaseConfig = {
-  apiKey: "AIzaSyCPIfra8YuSnh9C5NbglpRdg4KE5aigHDI",
-  authDomain: "support-32682.firebaseapp.com",
-  projectId: "support-32682",
-  storageBucket: "support-32682.appspot.com",
-  messagingSenderId: "911974697786",
-  appId: "1:911974697786:web:ac226eb90c19af72dbde03"
+ apiKey:"AIzaSyCPIfra8YuSnh9C5NbglpRdg4KE5aigHDI",
+ authDomain:"support-32682.firebaseapp.com",
+ projectId:"support-32682"
 };
 firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
+const db=firebase.firestore();
 
-// ===== SETTINGS =====
-let isAdmin = false;
-const supportUsers = ["timmy","admin","support"]; 
+// State
+let admin=false;
+const support=["timmy","admin","support"];
 
-// ===== NAVIGATION =====
-function showPage(page){
-  document.getElementById("home").style.display="none";
-  document.getElementById("reports").style.display="none";
-  document.getElementById("admin").style.display="none";
-  document.getElementById(page).style.display="block";
+// Save username
+if(localStorage.user) document.getElementById("user").value=localStorage.user;
+
+// Navigation
+function nav(page,btn){
+ document.querySelectorAll(".main > div").forEach(d=>d.style.display="none");
+ document.getElementById(page).style.display="block";
+ document.querySelectorAll(".nav button").forEach(b=>b.classList.remove("active"));
+ btn.classList.add("active");
 }
 
-// ===== NOTIFICATIONS =====
-function notify(msg){
-  const n = document.getElementById("notify");
-  n.innerText = msg; n.style.display="block";
-  setTimeout(()=>{ n.style.display="none"; }, 3000);
+// Toast
+function toast(msg){
+ const t=document.getElementById("toast");
+ t.innerText=msg;
+ t.style.opacity=1;
+ setTimeout(()=>t.style.opacity=0,2000);
 }
 
-// ===== SUBMIT REPORT =====
-function submitReport(){
-  const user = document.getElementById("username").value || "Anonymous";
-  const text = document.getElementById("reportText").value;
-  if(!text) return alert("Write something!");
-  const support = supportUsers.includes(user);
+// Submit
+function submit(){
+ const user=document.getElementById("user").value||"Anonymous";
+ const text=document.getElementById("text").value;
+ if(!text)return;
 
-  db.collection("reports").add({ user, text, status:"open", support, comments:[] })
-    .then(()=>notify("Report submitted!"));
-  document.getElementById("reportText").value="";
+ localStorage.user=user;
+
+ db.collection("reports").add({
+  user,text,status:"open",
+  support:support.includes(user),
+  comments:[]
+ });
+
+ toast("Report submitted");
+ document.getElementById("text").value="";
 }
 
-// ===== LOAD REPORTS =====
-db.collection("reports").onSnapshot(snapshot=>{
-  const data = {};
-  snapshot.forEach(doc=>{ data[doc.id]=doc.data(); });
-  renderReports(data);
+// Load reports
+db.collection("reports").onSnapshot(snap=>{
+ let html="";
+ let total=0,open=0,res=0;
+
+ snap.forEach(doc=>{
+  total++;
+  const r=doc.data();
+
+  if(r.status==="open") open++;
+  if(r.status==="resolved") res++;
+
+  let cls="open";
+  if(r.status==="in progress") cls="progress";
+  if(r.status==="resolved") cls="resolved";
+
+  html+=`
+  <div class="card">
+   <b>${r.user}</b> ${r.support?'<span class="badge">Support</span>':''}
+   <div class="status ${cls}">${r.status}</div>
+   <p>${r.text}</p>
+
+   <button onclick="comment('${doc.id}')">Comment</button>
+
+   ${admin?`
+   <button onclick="update('${doc.id}','in progress')">Progress</button>
+   <button onclick="update('${doc.id}','resolved')">Resolve</button>
+   <button onclick="del('${doc.id}')">Delete</button>`:''}
+
+   ${(r.comments||[]).map(c=>`
+     <div class="comment">${c.user}: ${c.text}</div>
+   `).join("")}
+  </div>`;
+ });
+
+ document.getElementById("list").innerHTML=html;
+ document.getElementById("total").innerText="Total: "+total;
+ document.getElementById("open").innerText="Open: "+open;
+ document.getElementById("resolved").innerText="Resolved: "+res;
 });
 
-function renderReports(data){
-  const list = document.getElementById("reportList");
-  list.innerHTML="";
-  Object.entries(data).forEach(([id,r])=>{
-    let statusClass="status-open";
-    if(r.status==="in progress") statusClass="status-progress";
-    if(r.status==="resolved") statusClass="status-resolved";
-    const div = document.createElement("div");
-    div.className="card";
-    div.innerHTML=`
-      <b>${r.user}</b> ${r.support?'<span class="badge">Support</span>':''}
-      <br><span class="${statusClass}">${r.status}</span>
-      <p>${r.text}</p>
-      <button class="action" onclick="comment('${id}')">Comment <i class="fas fa-comment"></i></button>
-      ${isAdmin ? `<button onclick="setStatus('${id}','in progress')">In Progress</button>
-                    <button onclick="setStatus('${id}','resolved')">Resolved</button>
-                    <button onclick="deleteReport('${id}')">Delete</button>` : ''}
-      <div id="c${id}"></div>
-    `;
-    list.appendChild(div);
-    const cDiv = document.getElementById("c"+id);
-    (r.comments||[]).forEach(c=>{
-      const el = document.createElement("div");
-      el.className="comment";
-      el.innerHTML = `${c.user} ${c.support?'<span class="badge">Support</span>':''}: ${c.text}`;
-      cDiv.appendChild(el);
-    });
-  });
-}
-
-// ===== COMMENTS =====
+// Comment
 function comment(id){
-  const user = prompt("Username:");
-  const text = prompt("Comment:");
-  if(!text) return;
-  const support = supportUsers.includes(user);
-  const docRef = db.collection("reports").doc(id);
-  docRef.get().then(doc=>{
-    let comments = doc.data().comments||[];
-    comments.push({user,text,support});
-    docRef.update({comments});
-    notify("Comment added!");
-  });
+ const user=prompt("Username");
+ const text=prompt("Comment");
+ if(!text)return;
+
+ const ref=db.collection("reports").doc(id);
+ ref.get().then(d=>{
+  let c=d.data().comments||[];
+  c.push({user,text});
+  ref.update({comments:c});
+  toast("Comment added");
+ });
 }
 
-// ===== ADMIN LOGIN =====
-function loginAdmin(){
-  const code = document.getElementById("adminCode").value;
-  if(code==="6118"){
-    isAdmin=true;
-    document.getElementById("adminControls").style.display="block";
-    notify("Admin logged in!");
-  } else alert("Wrong code");
+// Admin
+function login(){
+ if(document.getElementById("code").value==="6118"){
+  admin=true;
+  document.getElementById("adminBox").style.display="block";
+  toast("Admin enabled");
+ }
 }
 
-// ===== ADMIN ACTIONS =====
-function setStatus(id,status){
-  db.collection("reports").doc(id).update({status});
-  notify("Status updated!");
+// Admin actions
+function update(id,s){
+ db.collection("reports").doc(id).update({status:s});
 }
-function deleteReport(id){
-  db.collection("reports").doc(id).delete();
-  notify("Report deleted!");
+function del(id){
+ db.collection("reports").doc(id).delete();
 }
 </script>
+
 </body>
 </html>
