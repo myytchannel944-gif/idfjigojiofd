@@ -11,57 +11,109 @@
 
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:Inter;background:#0b1120;color:#fff}
-
-.sidebar{
- position:fixed;width:240px;height:100%;
- background:#020617;padding:20px;
+body{
+ font-family:Inter;
+ background:linear-gradient(135deg,#0f172a,#020617);
+ color:white;
 }
-.logo{font-size:20px;font-weight:600;margin-bottom:25px}
+
+/* SIDEBAR */
+.sidebar{
+ position:fixed;width:250px;height:100%;
+ backdrop-filter:blur(15px);
+ background:rgba(2,6,23,0.7);
+ padding:20px;
+ border-right:1px solid rgba(255,255,255,0.05);
+}
+
+.logo{font-size:22px;font-weight:600;margin-bottom:30px}
 
 .nav button{
- width:100%;padding:12px;margin-bottom:8px;
- border:none;background:none;color:#94a3b8;
- border-radius:8px;text-align:left;cursor:pointer;
+ width:100%;
+ padding:12px;
+ margin-bottom:10px;
+ border:none;
+ border-radius:10px;
+ background:none;
+ color:#94a3b8;
+ cursor:pointer;
+ transition:.2s;
 }
-.nav button.active,.nav button:hover{
- background:#1e293b;color:#fff;
+
+.nav button.active,
+.nav button:hover{
+ background:rgba(59,130,246,0.2);
+ color:#fff;
 }
 
-.main{margin-left:240px;padding:25px;animation:fade 0.4s}
+/* MAIN */
+.main{
+ margin-left:260px;
+ padding:25px;
+ animation:fade .4s;
+}
 
-.header{font-size:26px;margin-bottom:20px}
+.header{
+ font-size:26px;
+ margin-bottom:20px;
+ display:flex;
+ justify-content:space-between;
+ align-items:center;
+}
 
+/* STATS */
 .grid{
  display:grid;
- grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
- gap:15px;margin-bottom:20px;
+ grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+ gap:15px;
+ margin-bottom:20px;
 }
 
 .stat{
- background:#1e293b;padding:15px;border-radius:12px;
+ background:rgba(30,41,59,0.6);
+ padding:15px;
+ border-radius:12px;
  text-align:center;
+ backdrop-filter:blur(10px);
 }
 
+/* CARD */
 .card{
- background:#1e293b;padding:20px;border-radius:12px;
- margin-bottom:15px;transition:.2s;
+ background:rgba(30,41,59,0.6);
+ padding:20px;
+ border-radius:12px;
+ margin-bottom:15px;
+ backdrop-filter:blur(10px);
+ transition:.2s;
+ cursor:pointer;
 }
-.card:hover{transform:translateY(-4px)}
+.card:hover{
+ transform:translateY(-5px);
+ box-shadow:0 10px 30px rgba(0,0,0,0.4);
+}
 
+/* INPUT */
 input,textarea{
- width:100%;padding:12px;margin-top:10px;
- border:none;border-radius:8px;
- background:#0f172a;color:white;
+ width:100%;
+ padding:12px;
+ margin-top:10px;
+ border:none;
+ border-radius:10px;
+ background:#0f172a;
+ color:white;
 }
 
 button{
- margin-top:10px;padding:10px;
- border:none;border-radius:8px;
- background:#3b82f6;color:white;
+ margin-top:10px;
+ padding:10px;
+ border:none;
+ border-radius:10px;
+ background:#3b82f6;
+ color:white;
  cursor:pointer;
 }
 
+/* STATUS */
 .status{font-weight:600}
 .open{color:#ef4444}
 .progress{color:#f59e0b}
@@ -75,13 +127,33 @@ button{
  margin-left:6px;
 }
 
-.comment{
- background:#0f172a;
- margin-top:6px;
- padding:6px;
- border-radius:6px;
+/* MODAL */
+.modal{
+ position:fixed;
+ top:0;left:0;
+ width:100%;height:100%;
+ background:rgba(0,0,0,0.6);
+ display:none;
+ justify-content:center;
+ align-items:center;
 }
 
+.modal-content{
+ width:500px;
+ background:#1e293b;
+ padding:20px;
+ border-radius:12px;
+}
+
+/* COMMENTS */
+.comment{
+ background:#0f172a;
+ padding:8px;
+ margin-top:5px;
+ border-radius:8px;
+}
+
+/* TOAST */
 .toast{
  position:fixed;
  bottom:20px;
@@ -93,6 +165,7 @@ button{
  transition:.3s;
 }
 
+/* ANIM */
 @keyframes fade{
  from{opacity:0;transform:translateY(10px)}
  to{opacity:1}
@@ -104,7 +177,6 @@ button{
 
 <div class="sidebar">
  <div class="logo">TSG Support</div>
-
  <div class="nav">
   <button onclick="nav('home',this)" class="active">Dashboard</button>
   <button onclick="nav('reports',this)">Reports</button>
@@ -114,14 +186,13 @@ button{
 
 <div class="main">
 
-<!-- HOME -->
 <div id="home">
  <div class="header">Dashboard</div>
 
  <div class="grid">
-  <div class="stat" id="total">Total: 0</div>
-  <div class="stat" id="open">Open: 0</div>
-  <div class="stat" id="resolved">Resolved: 0</div>
+  <div class="stat" id="total">0 Reports</div>
+  <div class="stat" id="open">0 Open</div>
+  <div class="stat" id="resolved">0 Resolved</div>
  </div>
 
  <div class="card">
@@ -132,27 +203,38 @@ button{
  </div>
 </div>
 
-<!-- REPORTS -->
 <div id="reports" style="display:none">
  <div class="header">Reports</div>
  <div id="list"></div>
 </div>
 
-<!-- ADMIN -->
 <div id="admin" style="display:none">
  <div class="header">Admin</div>
- <input id="code" placeholder="Enter admin code">
+ <input id="code" placeholder="Admin Code">
  <button onclick="login()">Login</button>
  <div id="adminBox" style="display:none">Admin Enabled</div>
 </div>
 
 </div>
 
+<!-- MODAL -->
+<div id="modal" class="modal">
+ <div class="modal-content">
+  <h3 id="mUser"></h3>
+  <p id="mText"></p>
+  <div id="mComments"></div>
+  <input id="cUser" placeholder="Username">
+  <input id="cText" placeholder="Comment">
+  <button onclick="sendComment()">Send</button>
+  <button onclick="closeModal()">Close</button>
+ </div>
+</div>
+
 <div id="toast" class="toast"></div>
 
 <script>
-// Firebase
-const firebaseConfig = {
+// FIREBASE
+const firebaseConfig={
  apiKey:"AIzaSyCPIfra8YuSnh9C5NbglpRdg4KE5aigHDI",
  authDomain:"support-32682.firebaseapp.com",
  projectId:"support-32682"
@@ -160,14 +242,11 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
 
-// State
 let admin=false;
+let currentID=null;
 const support=["timmy","admin","support"];
 
-// Save username
-if(localStorage.user) document.getElementById("user").value=localStorage.user;
-
-// Navigation
+// NAV
 function nav(page,btn){
  document.querySelectorAll(".main > div").forEach(d=>d.style.display="none");
  document.getElementById(page).style.display="block";
@@ -175,18 +254,18 @@ function nav(page,btn){
  btn.classList.add("active");
 }
 
-// Toast
+// TOAST
 function toast(msg){
- const t=document.getElementById("toast");
+ let t=document.getElementById("toast");
  t.innerText=msg;
  t.style.opacity=1;
  setTimeout(()=>t.style.opacity=0,2000);
 }
 
-// Submit
+// SUBMIT
 function submit(){
- const user=document.getElementById("user").value||"Anonymous";
- const text=document.getElementById("text").value;
+ let user=document.getElementById("user").value||"Anonymous";
+ let text=document.getElementById("text").value;
  if(!text)return;
 
  localStorage.user=user;
@@ -197,81 +276,83 @@ function submit(){
   comments:[]
  });
 
- toast("Report submitted");
- document.getElementById("text").value="";
+ toast("Report created");
 }
 
-// Load reports
+// LOAD
 db.collection("reports").onSnapshot(snap=>{
  let html="";
  let total=0,open=0,res=0;
 
  snap.forEach(doc=>{
+  let r=doc.data();
   total++;
-  const r=doc.data();
 
-  if(r.status==="open") open++;
-  if(r.status==="resolved") res++;
+  if(r.status==="open")open++;
+  if(r.status==="resolved")res++;
 
   let cls="open";
-  if(r.status==="in progress") cls="progress";
-  if(r.status==="resolved") cls="resolved";
+  if(r.status==="in progress")cls="progress";
+  if(r.status==="resolved")cls="resolved";
 
   html+=`
-  <div class="card">
+  <div class="card" onclick="openModal('${doc.id}')">
    <b>${r.user}</b> ${r.support?'<span class="badge">Support</span>':''}
-   <div class="status ${cls}">${r.status}</div>
+   <div class="${cls}">${r.status}</div>
    <p>${r.text}</p>
-
-   <button onclick="comment('${doc.id}')">Comment</button>
-
-   ${admin?`
-   <button onclick="update('${doc.id}','in progress')">Progress</button>
-   <button onclick="update('${doc.id}','resolved')">Resolve</button>
-   <button onclick="del('${doc.id}')">Delete</button>`:''}
-
-   ${(r.comments||[]).map(c=>`
-     <div class="comment">${c.user}: ${c.text}</div>
-   `).join("")}
   </div>`;
  });
 
  document.getElementById("list").innerHTML=html;
- document.getElementById("total").innerText="Total: "+total;
- document.getElementById("open").innerText="Open: "+open;
- document.getElementById("resolved").innerText="Resolved: "+res;
+ document.getElementById("total").innerText=total+" Reports";
+ document.getElementById("open").innerText=open+" Open";
+ document.getElementById("resolved").innerText=res+" Resolved";
 });
 
-// Comment
-function comment(id){
- const user=prompt("Username");
- const text=prompt("Comment");
+// MODAL
+function openModal(id){
+ currentID=id;
+ db.collection("reports").doc(id).get().then(d=>{
+  let r=d.data();
+  document.getElementById("modal").style.display="flex";
+  document.getElementById("mUser").innerText=r.user;
+  document.getElementById("mText").innerText=r.text;
+
+  let cHTML="";
+  (r.comments||[]).forEach(c=>{
+   cHTML+=`<div class="comment">${c.user}: ${c.text}</div>`;
+  });
+
+  document.getElementById("mComments").innerHTML=cHTML;
+ });
+}
+
+function closeModal(){
+ document.getElementById("modal").style.display="none";
+}
+
+// COMMENT
+function sendComment(){
+ let user=document.getElementById("cUser").value;
+ let text=document.getElementById("cText").value;
  if(!text)return;
 
- const ref=db.collection("reports").doc(id);
+ let ref=db.collection("reports").doc(currentID);
  ref.get().then(d=>{
   let c=d.data().comments||[];
   c.push({user,text});
   ref.update({comments:c});
   toast("Comment added");
+  openModal(currentID);
  });
 }
 
-// Admin
+// ADMIN
 function login(){
  if(document.getElementById("code").value==="6118"){
   admin=true;
-  document.getElementById("adminBox").style.display="block";
   toast("Admin enabled");
  }
-}
-
-// Admin actions
-function update(id,s){
- db.collection("reports").doc(id).update({status:s});
-}
-function del(id){
- db.collection("reports").doc(id).delete();
 }
 </script>
 
