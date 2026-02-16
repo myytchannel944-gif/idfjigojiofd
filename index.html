@@ -2,45 +2,63 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>TSG Support</title>
+<title>TSG Support Dashboard</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 
 <style>
-body {
+* {
   margin:0;
+  padding:0;
+  box-sizing:border-box;
   font-family:'Inter', sans-serif;
+}
+
+body {
+  display:flex;
   background:#0b0f1a;
   color:white;
 }
 
-nav {
-  display:flex;
-  justify-content:space-between;
-  padding:15px 25px;
+/* SIDEBAR */
+.sidebar {
+  width:240px;
+  height:100vh;
   background:#0f1424;
-  position:sticky;
-  top:0;
+  padding:20px;
 }
 
-nav h1 {
-  font-size:18px;
+.sidebar h2 {
+  margin-bottom:20px;
 }
 
-nav button {
-  background:#5865F2;
+.sidebar button {
+  width:100%;
+  margin:5px 0;
+  padding:10px;
+  background:#12172b;
   border:none;
-  padding:8px 14px;
-  border-radius:8px;
   color:white;
+  border-radius:8px;
   cursor:pointer;
 }
 
-.container {
-  max-width:1100px;
-  margin:auto;
+.sidebar button:hover {
+  background:#5865F2;
+}
+
+/* MAIN */
+.main {
+  flex:1;
   padding:20px;
+  overflow:auto;
+}
+
+.topbar {
+  display:flex;
+  justify-content:space-between;
+  margin-bottom:20px;
 }
 
 .card {
@@ -52,7 +70,7 @@ nav button {
 }
 
 .card:hover {
-  transform:translateY(-5px);
+  transform:translateY(-4px);
 }
 
 input, textarea, select {
@@ -65,13 +83,12 @@ input, textarea, select {
   border-radius:8px;
 }
 
-button.main {
+button.mainbtn {
   background:#5865F2;
   border:none;
   padding:10px;
   width:100%;
   border-radius:8px;
-  margin-top:10px;
   cursor:pointer;
 }
 
@@ -101,34 +118,53 @@ button.main {
   margin-left:5px;
 }
 
-.hidden {
+/* PAGES */
+.page {
   display:none;
+}
+
+.active {
+  display:block;
 }
 </style>
 </head>
 
 <body>
 
-<nav>
-  <h1>TSG Support</h1>
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <h2>TSG</h2>
+  <button onclick="showPage('dashboard')">Dashboard</button>
+  <button onclick="showPage('create')">Create Report</button>
   <button onclick="openAdmin()">Admin</button>
-</nav>
-
-<div class="container">
-
-<div class="card">
-  <h2>Create Report</h2>
-  <input id="name" placeholder="Your name">
-  <select id="type">
-    <option>Bug</option>
-    <option>Report</option>
-    <option>Question</option>
-  </select>
-  <textarea id="message" placeholder="Describe your issue"></textarea>
-  <button class="main" onclick="createReport()">Submit</button>
 </div>
 
-<div id="reports"></div>
+<!-- MAIN -->
+<div class="main">
+
+<div class="topbar">
+  <h1>Support System</h1>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard" class="page active">
+  <div id="reports"></div>
+</div>
+
+<!-- CREATE -->
+<div id="create" class="page">
+  <div class="card">
+    <h2>Create Report</h2>
+    <input id="name" placeholder="Your name">
+    <select id="type">
+      <option>Bug</option>
+      <option>Report</option>
+      <option>Question</option>
+    </select>
+    <textarea id="message" placeholder="Describe issue"></textarea>
+    <button class="mainbtn" onclick="createReport()">Submit</button>
+  </div>
+</div>
 
 </div>
 
@@ -136,36 +172,44 @@ button.main {
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getDatabase, ref, push, onValue, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
+/* 🔥 PUT YOUR FIREBASE CONFIG HERE */
 const firebaseConfig = {
-  apiKey: "YOUR_KEY",
-  authDomain: "YOUR_DOMAIN",
-  databaseURL: "YOUR_DB",
-  projectId: "YOUR_ID",
-  storageBucket: "YOUR_BUCKET",
-  messagingSenderId: "YOUR_MSG",
-  appId: "YOUR_APP"
+  apiKey: "PASTE",
+  authDomain: "PASTE",
+  databaseURL: "PASTE",
+  projectId: "PASTE",
+  storageBucket: "PASTE",
+  messagingSenderId: "PASTE",
+  appId: "PASTE"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-window.createReport = function() {
+/* NAVIGATION */
+window.showPage = function(page){
+  document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
+  document.getElementById(page).classList.add("active");
+}
+
+/* CREATE REPORT */
+window.createReport = function(){
   const name = document.getElementById("name").value;
   const type = document.getElementById("type").value;
   const message = document.getElementById("message").value;
 
   push(ref(db,"reports"), {
-    name, type, message,
-    status:"open",
-    comments:[]
+    name,type,message,
+    status:"open"
   });
 
-  alert("Report created!");
+  alert("Report submitted!");
 }
 
+/* LOAD REPORTS */
 const container = document.getElementById("reports");
 
-onValue(ref(db,"reports"), snap => {
+onValue(ref(db,"reports"), snap=>{
   container.innerHTML="";
   snap.forEach(child=>{
     const data = child.val();
@@ -175,10 +219,9 @@ onValue(ref(db,"reports"), snap => {
     <div class="card">
       <h3>${data.type}</h3>
       <p>${data.message}</p>
-      <small>by ${data.name}</small><br>
-      <span class="status ${data.status}">
-        ${data.status}
-      </span>
+      <small>by ${data.name}</small><br><br>
+
+      <span class="status ${data.status}">${data.status}</span>
     `;
 
     if(admin){
@@ -193,7 +236,8 @@ onValue(ref(db,"reports"), snap => {
 
     if(data.comments){
       Object.values(data.comments).forEach(c=>{
-        html += `<div class="comment">
+        html += `
+        <div class="comment">
           ${c.text} - ${c.user}
           ${c.support ? '<span class="badge">SUPPORT</span>' : ''}
         </div>`;
@@ -209,6 +253,7 @@ onValue(ref(db,"reports"), snap => {
   });
 });
 
+/* ADMIN */
 let admin=false;
 
 window.openAdmin = function(){
@@ -219,10 +264,12 @@ window.openAdmin = function(){
   }
 }
 
+/* STATUS */
 window.setStatus = function(id,status){
   update(ref(db,"reports/"+id), {status});
 }
 
+/* COMMENTS */
 window.addComment = function(id){
   const text = document.getElementById("c_"+id).value;
 
