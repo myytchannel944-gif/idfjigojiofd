@@ -2,176 +2,262 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>TSG Discord Support</title>
-<style>
-body { font-family: Arial, sans-serif; margin:20px; background:#f4f4f4; color:#333; }
-h1,h2,h3 { color:#222; }
-textarea,input,select { width:100%; padding:10px; margin:5px 0; }
-button { padding:8px 12px; margin:5px; cursor:pointer; }
-.report { border:1px solid #ccc; padding:10px; margin:10px 0; background:#fff; border-radius:5px; }
-.comment { margin-left:20px; background:#eef; padding:5px; border-radius:4px; margin-top:5px; }
-.badge { background:green; color:white; padding:2px 6px; border-radius:4px; font-size:12px; margin-right:5px; }
-#adminPanel { border:2px solid #333; padding:15px; background:#ddd; border-radius:6px; margin-top:20px; display:none; }
-.status-open { color:red; font-weight:bold; }
-.status-in-progress { color:orange; font-weight:bold; }
-.status-resolved { color:green; font-weight:bold; }
-</style>
-</head>
-<body>
-
-<h1>TSG Discord Support</h1>
-
-<h2>Submit a Report</h2>
-<input type="text" id="username" placeholder="Enter your username"><br>
-<textarea id="reportInput" placeholder="Write your report..." rows="4"></textarea><br>
-<button onclick="submitReport()">Submit Report</button>
-
-<hr>
-
-<h2>Reports</h2>
-<div id="reports"></div>
-
-<hr>
-
-<h2>Admin Panel</h2>
-<input type="password" id="adminCode" placeholder="Enter admin code">
-<button onclick="loginAdmin()">Login</button>
-
-<div id="adminPanel">
-  <h3>Admin Controls</h3>
-  <button onclick="markSelected('in progress')">Mark Selected In Progress</button>
-  <button onclick="markSelected('resolved')">Mark Selected Resolved</button>
-  <button onclick="deleteSelected()">Delete Selected</button>
-</div>
+<title>TSG Support Dashboard PRO</title>
 
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<!-- Fonts & Icons -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+:root {
+  --primary:#3b82f6;
+  --bg:#0f172a;
+  --card:#1e293b;
+  --hover:#334155;
+  --text:#fff;
+}
+body {
+  margin:0; font-family:'Inter',sans-serif;
+  background:var(--bg); color:var(--text);
+  transition: background 0.3s;
+}
+.sidebar {
+  width:220px; height:100vh; background:#020617;
+  position:fixed; padding:20px; display:flex; flex-direction:column;
+}
+.sidebar h2 { margin-bottom:20px; font-weight:600; }
+.sidebar button {
+  display:flex; align-items:center; gap:10px;
+  width:100%; margin:10px 0; padding:10px; background:var(--card);
+  border:none; color:white; cursor:pointer; border-radius:8px;
+  font-weight:600; transition: all 0.2s;
+}
+.sidebar button:hover { background:var(--hover); transform:translateX(5px); }
+
+.main { margin-left:240px; padding:20px; transition: all 0.3s; }
+
+.card {
+  background:var(--card); padding:15px; border-radius:12px;
+  margin-bottom:15px; transition: transform 0.2s, box-shadow 0.2s;
+}
+.card:hover { transform: translateY(-3px); box-shadow:0 4px 20px rgba(0,0,0,0.4); }
+
+input, textarea { width:100%; padding:10px; margin:5px 0; border-radius:8px; border:none; }
+
+button.action {
+  background:var(--primary); border:none; padding:8px 12px;
+  color:white; border-radius:6px; cursor:pointer; font-weight:600;
+  transition: all 0.2s;
+}
+button.action:hover { background:#2563eb; transform:translateY(-2px); }
+
+.status-open { color:#ef4444; font-weight:600; }
+.status-progress { color:#f59e0b; font-weight:600; }
+.status-resolved { color:#22c55e; font-weight:600; }
+
+.badge { background:#22c55e; padding:2px 6px; border-radius:6px; font-size:12px; margin-left:5px; }
+
+.comment {
+  margin-left:15px; background:#334155;
+  padding:5px; border-radius:8px; margin-top:5px;
+  animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity:0; transform:translateY(5px);}
+  to { opacity:1; transform:translateY(0);}
+}
+
+.notification {
+  position:fixed; top:20px; right:20px;
+  background:var(--primary); padding:10px 15px; border-radius:8px;
+  color:white; box-shadow:0 4px 15px rgba(0,0,0,0.5);
+  animation: slideIn 0.5s forwards; opacity:0;
+}
+@keyframes slideIn {
+  to { opacity:1; transform:translateX(0);}
+  from { opacity:0; transform:translateX(50px);}
+}
+</style>
+</head>
+
+<body>
+
+<div class="sidebar">
+  <h2><i class="fas fa-headset"></i> TSG Support</h2>
+  <button onclick="showPage('home')"><i class="fas fa-home"></i> Home</button>
+  <button onclick="showPage('reports')"><i class="fas fa-clipboard-list"></i> Reports</button>
+  <button onclick="showPage('admin')"><i class="fas fa-user-shield"></i> Admin</button>
+</div>
+
+<div class="main">
+
+<!-- HOME -->
+<div id="home">
+  <h1>Dashboard</h1>
+  <div class="card">
+    <h3>Submit a Report</h3>
+    <input id="username" placeholder="Username">
+    <textarea id="reportText" placeholder="Describe your issue..."></textarea>
+    <button class="action" onclick="submitReport()">Submit <i class="fas fa-paper-plane"></i></button>
+  </div>
+</div>
+
+<!-- REPORTS -->
+<div id="reports" style="display:none;">
+  <h1>Reports</h1>
+  <div id="reportList"></div>
+</div>
+
+<!-- ADMIN -->
+<div id="admin" style="display:none;">
+  <h1>Admin Panel</h1>
+  <input id="adminCode" placeholder="Enter admin code">
+  <button class="action" onclick="loginAdmin()">Login <i class="fas fa-key"></i></button>
+  <div id="adminControls" style="display:none; margin-top:10px;">
+    <p><i class="fas fa-check-circle"></i> Admin Access Granted</p>
+  </div>
+</div>
+
+</div>
+
+<div id="notify" class="notification" style="display:none;"></div>
+
 <script>
-  // ===== Firebase Config =====
-  const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-    databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT_ID.appspot.com",
-    messagingSenderId: "YOUR_SENDER_ID",
-    appId: "YOUR_APP_ID"
-  };
-  firebase.initializeApp(firebaseConfig);
-  const db = firebase.database();
+// ===== FIREBASE CONFIG =====
+const firebaseConfig = {
+  apiKey: "AIzaSyCPIfra8YuSnh9C5NbglpRdg4KE5aigHDI",
+  authDomain: "support-32682.firebaseapp.com",
+  databaseURL: "https://support-32682-default-rtdb.firebaseio.com",
+  projectId: "support-32682",
+  storageBucket: "support-32682.firebasestorage.app",
+  messagingSenderId: "911974697786",
+  appId: "1:911974697786:web:ac226eb90c19af72dbde03"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 
-  let isAdmin = false;
-  const supportUsers = ["SupportUser1","SupportUser2"]; // verified support usernames
+// ===== SETTINGS =====
+let isAdmin = false;
+const supportUsers = ["timmy","admin","support"]; 
 
-  // ===== Submit Report =====
-  function submitReport() {
-    const username = document.getElementById("username").value.trim() || "Anonymous";
-    const text = document.getElementById("reportInput").value.trim();
-    if(!text) return alert("Write a report first!");
-    const isSupport = supportUsers.includes(username);
+// ===== NAVIGATION =====
+function showPage(page){
+  document.getElementById("home").style.display="none";
+  document.getElementById("reports").style.display="none";
+  document.getElementById("admin").style.display="none";
+  document.getElementById(page).style.display="block";
+}
 
-    const newRef = db.ref('reports').push();
-    newRef.set({
-      id: newRef.key,
-      username,
-      text,
-      support: isSupport,
-      status: "open",
-      comments: []
-    });
+// ===== NOTIFICATIONS =====
+function notify(msg){
+  const n = document.getElementById("notify");
+  n.innerText = msg; n.style.display="block";
+  setTimeout(()=>{ n.style.display="none"; }, 3000);
+}
 
-    document.getElementById("reportInput").value = "";
-    document.getElementById("username").value = "";
-  }
+// ===== SUBMIT REPORT =====
+function submitReport(){
+  const user = document.getElementById("username").value || "Anonymous";
+  const text = document.getElementById("reportText").value;
+  if(!text) return alert("Write something!");
 
-  // ===== Listen for report changes =====
-  db.ref('reports').on('value', snapshot => {
-    const data = snapshot.val();
-    renderReports(data);
+  const support = supportUsers.includes(user);
+
+  db.ref("reports").push({
+    user, text, status:"open", support, comments:[]
   });
 
-  function renderReports(data) {
-    const container = document.getElementById("reports");
-    container.innerHTML = "";
-    if(!data) return;
+  document.getElementById("reportText").value="";
+  notify("Report submitted!");
+}
 
-    Object.values(data).forEach(r => {
-      const div = document.createElement("div");
-      div.className = "report";
-      div.id = "r"+r.id;
+// ===== LOAD REPORTS =====
+db.ref("reports").on("value", snap=>{
+  const data = snap.val();
+  renderReports(data);
+});
 
-      let statusClass = "status-open";
-      if(r.status==="in progress") statusClass = "status-in-progress";
-      if(r.status==="resolved") statusClass = "status-resolved";
+function renderReports(data){
+  const list = document.getElementById("reportList");
+  list.innerHTML="";
+  if(!data) return;
 
-      div.innerHTML = `
-        <input type="checkbox" class="selectReport" data-id="${r.id}" style="display:${isAdmin?'inline-block':'none'}">
-        <b>${r.username}</b> ${r.support?'<span class="badge">Support</span>':''} — <span class="${statusClass}">${r.status}</span><br>
-        ${r.text}<br>
-        <button onclick="addComment('${r.id}')">Comment</button>
-        <div id="comments${r.id}"></div>
-      `;
+  Object.entries(data).forEach(([id,r])=>{
+    let statusClass="status-open";
+    if(r.status==="in progress") statusClass="status-progress";
+    if(r.status==="resolved") statusClass="status-resolved";
 
-      container.appendChild(div);
+    const div = document.createElement("div");
+    div.className="card";
 
-      const commentsDiv = document.getElementById("comments"+r.id);
-      commentsDiv.innerHTML = "";
-      (r.comments||[]).forEach(c => {
-        const commentDiv = document.createElement("div");
-        commentDiv.className = "comment";
-        commentDiv.innerHTML = `${c.support?'<span class="badge">Support</span>':''}${c.text} - <i>${c.username}</i>`;
-        commentsDiv.appendChild(commentDiv);
-      });
+    div.innerHTML=`
+      <b>${r.user}</b> ${r.support?'<span class="badge">Support</span>':''}
+      <br><span class="${statusClass}">${r.status}</span>
+      <p>${r.text}</p>
+
+      <button class="action" onclick="comment('${id}')">Comment <i class="fas fa-comment"></i></button>
+
+      ${isAdmin ? `
+        <button onclick="setStatus('${id}','in progress')">In Progress</button>
+        <button onclick="setStatus('${id}','resolved')">Resolved</button>
+        <button onclick="deleteReport('${id}')">Delete</button>
+      ` : ''}
+
+      <div id="c${id}"></div>
+    `;
+
+    list.appendChild(div);
+
+    const cDiv = document.getElementById("c"+id);
+    (r.comments||[]).forEach(c=>{
+      const el = document.createElement("div");
+      el.className="comment";
+      el.innerHTML = `${c.user} ${c.support?'<span class="badge">Support</span>':''}: ${c.text}`;
+      cDiv.appendChild(el);
     });
-  }
+  });
+}
 
-  function addComment(reportId) {
-    const text = prompt("Enter your comment:").trim();
-    if(!text) return;
-    const username = prompt("Enter your username:").trim() || "Anonymous";
-    const isSupport = supportUsers.includes(username);
+// ===== COMMENTS =====
+function comment(id){
+  const user = prompt("Username:");
+  const text = prompt("Comment:");
+  if(!text) return;
+  const support = supportUsers.includes(user);
+  db.ref("reports/"+id+"/comments").once("value", snap=>{
+    let comments = snap.val() || [];
+    comments.push({user,text,support});
+    db.ref("reports/"+id+"/comments").set(comments);
+  });
+  notify("Comment added!");
+}
 
-    const comment = {text, username, support:isSupport};
-    db.ref(`reports/${reportId}/comments`).once('value').then(snapshot => {
-      const comments = snapshot.val()||[];
-      comments.push(comment);
-      db.ref(`reports/${reportId}/comments`).set(comments);
-    });
-  }
+// ===== ADMIN LOGIN =====
+function loginAdmin(){
+  const code = document.getElementById("adminCode").value;
+  if(code==="6118"){
+    isAdmin=true;
+    document.getElementById("adminControls").style.display="block";
+    notify("Admin logged in!");
+  } else alert("Wrong code");
+}
 
-  // ===== Admin =====
-  function loginAdmin() {
-    const code = document.getElementById("adminCode").value;
-    if(code==="6118") {
-      isAdmin = true;
-      document.getElementById("adminPanel").style.display="block";
-      renderReports();
-      alert("Admin access granted!");
-    } else {
-      alert("Wrong admin code!");
-    }
-  }
+// ===== ADMIN ACTIONS =====
+function setStatus(id,status){
+  db.ref("reports/"+id+"/status").set(status);
+  notify("Status updated!");
+}
 
-  function getSelectedReports() {
-    const checkboxes = document.querySelectorAll(".selectReport");
-    return Array.from(checkboxes)
-      .filter(cb=>cb.checked)
-      .map(cb=>cb.dataset.id);
-  }
-
-  function markSelected(status) {
-    if(!isAdmin) return alert("Admin access required!");
-    const selected = getSelectedReports();
-    selected.forEach(id => db.ref(`reports/${id}/status`).set(status));
-  }
-
-  function deleteSelected() {
-    if(!isAdmin) return alert("Admin access required!");
-    const selected = getSelectedReports();
-    selected.forEach(id => db.ref(`reports/${id}`).remove());
-  }
-
+function deleteReport(id){
+  db.ref("reports/"+id).remove();
+  notify("Report deleted!");
+}
 </script>
+
 </body>
 </html>
