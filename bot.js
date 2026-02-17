@@ -1,12 +1,38 @@
+// ===== LOAD ENV =====
+require('dotenv').config();
+
 const { Client, GatewayIntentBits, Partials, ActionRowBuilder, ButtonBuilder, ButtonStyle, REST, Routes } = require('discord.js');
+const sqlite3 = require('sqlite3').verbose();
 
 // ===== CONFIG =====
-const BOT_TOKEN = MTQ1MTMzOTI2MjYxNTA5MzM4Mg.GWUxPQ.TDa6GrSGLEVKPsalABID8jOLahoLoZmVMbmYtY; // <-- Paste your token
-const GUILD_ID = 1472277307002589216;       // <-- Paste your server ID
-const STAFF_APP_CHANNEL_ID = 1473081595945812049; // Staff app channel
-// ==================
+const BOT_TOKEN = process.env.BOT_TOKEN;
+const GUILD_ID = process.env.GUILD_ID;
+const STAFF_APP_CHANNEL_ID = process.env.STAFF_APP_CHANNEL_ID;
 
-// Create the client
+// ===== DATABASE =====
+const db = new sqlite3.Database('./data.db', (err) => {
+    if (err) console.error('SQLite error:', err);
+});
+
+// Create table if it doesn't exist
+db.run(`CREATE TABLE IF NOT EXISTS bot_data (
+    key TEXT PRIMARY KEY,
+    value TEXT
+)`);
+
+// Helper functions to store/load staffAppMessageId
+function saveMessageId(id) {
+    db.run(`INSERT OR REPLACE INTO bot_data(key, value) VALUES(?, ?)`, ['staffAppMessageId', id]);
+}
+
+function loadMessageId(callback) {
+    db.get(`SELECT value FROM bot_data WHERE key = ?`, ['staffAppMessageId'], (err, row) => {
+        if (err) console.error(err);
+        callback(row ? row.value : null);
+    });
+}
+
+// ===== CLIENT SETUP =====
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -19,7 +45,12 @@ const client = new Client({
 
 let staffAppMessageId = null;
 
-// Helper function to create Staff App Embed
+// Load message ID from database on start
+loadMessageId((id) => {
+    staffAppMessageId = id;
+});
+
+// ===== EMBED HELPERS =====
 function getStaffEmbed(isOpen) {
     if (isOpen) {
         return {
@@ -50,7 +81,7 @@ function getStaffEmbed(isOpen) {
     }
 }
 
-// ===== Register slash commands =====
+// ===== REGISTER SLASH COMMANDS =====
 client.once('ready', async () => {
     console.log(`${client.user.tag} is online! Registering slash commands...`);
 
@@ -72,7 +103,7 @@ client.once('ready', async () => {
     }
 });
 
-// ===== Handle slash commands =====
+// ===== HANDLE COMMANDS =====
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
@@ -89,6 +120,7 @@ client.on('interactionCreate', async interaction => {
                         .setURL("https://melon.ly/form/7429303261795979264")
                 );
 
+            // Edit existing message if exists
             if (staffAppMessageId) {
                 const message = await channel.messages.fetch(staffAppMessageId).catch(() => null);
                 if (message) {
@@ -97,8 +129,10 @@ client.on('interactionCreate', async interaction => {
                 }
             }
 
+            // Send new message
             const sentMessage = await channel.send({ embeds: [getStaffEmbed(true)], components: [row] });
             staffAppMessageId = sentMessage.id;
+            saveMessageId(staffAppMessageId);
             return interaction.reply({ content: "Staff Application is now open! ✅", ephemeral: true });
         }
 
@@ -118,5 +152,5 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-// ===== Login =====
+// ===== LOGIN =====
 client.login(BOT_TOKEN).catch(err => console.error('Login failed:', err));
