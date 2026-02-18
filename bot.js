@@ -13,7 +13,6 @@ const client = new Client({
     partials: [Partials.Channel, Partials.GuildMember, Partials.Message]
 });
 
-client.commands = new Collection();
 const BOT_COLOR = "#f6b9bc"; 
 const BANNER_URL = "https://cdn.discordapp.com/attachments/1472295068231532808/1473557629749039155/ocbvKoC.jpg?ex=6996a4fc&is=6995537c&hm=e38629356f5050e338cf33bed692c2caed54a6970a54da2ae1a0a75396cb932f&";
 
@@ -22,14 +21,14 @@ const loadData = (file, fallback) => fs.existsSync(file) ? JSON.parse(fs.readFil
 const saveData = (file, data) => fs.writeFileSync(file, JSON.stringify(data, null, 2));
 let config = loadData('./config.json', { generalRole: null, staffRole: null, mgmtRole: null, logChannel: null });
 
+// Health Check for Railway
 const app = express();
 app.get('/', (req, res) => res.send('System Online.'));
 app.listen(process.env.PORT || 3000);
 
-// -------------------- Slash Command Definitions --------------------
+// -------------------- Slash Command Registration --------------------
 
 const slashCommands = [
-    // Setup Command
     new SlashCommandBuilder()
         .setName('setup')
         .setDescription('Deploy the support infrastructure')
@@ -38,52 +37,30 @@ const slashCommands = [
         .addRoleOption(opt => opt.setName('management').setDescription('Management Role').setRequired(true))
         .addChannelOption(opt => opt.setName('logs').setDescription('Log Channel').setRequired(true)),
 
-    // Embed Builder Command (with your specific message)
-    new SlashCommandBuilder()
-        .setName('embed')
-        .setDescription('Executive Embed Creator tool'),
-
-    // Lockdown/Unlock
+    new SlashCommandBuilder().setName('embed').setDescription('Executive Embed Creator tool'),
     new SlashCommandBuilder().setName('lockdown').setDescription('Restrict channel access'),
     new SlashCommandBuilder().setName('unlock').setDescription('Restore channel access'),
-    
-    // Help
     new SlashCommandBuilder().setName('help').setDescription('View available commands')
 ].map(command => command.toJSON());
 
-// -------------------- Interaction Handling --------------------
+// -------------------- Interaction Logic --------------------
 
 client.on('interactionCreate', async (interaction) => {
     if (interaction.isChatInputCommand()) {
         const { commandName } = interaction;
 
-        if (commandName === 'help') {
-            const help = new EmbedBuilder()
-                .setTitle('🏛️ System Directory')
-                .setDescription('Use `/` to access the following executive commands:')
-                .addFields(
-                    { name: '`/setup`', value: 'Deploy the inquiry panel with banner.' },
-                    { name: '`/embed`', value: 'Create custom executive embeds.' },
-                    { name: '`/lockdown` / `/unlock`', value: 'Manage channel permissions.' }
-                )
-                .setColor(BOT_COLOR);
-            return interaction.reply({ embeds: [help] });
-        }
-
         if (commandName === 'embed') {
-            // Your requested "Maintenance" message
             const maintenance = new EmbedBuilder()
                 .setTitle('⚠️ System Notice')
                 .setDescription('Sorry, the bot did not respond. Please contact the owner.')
                 .setColor('#f1c40f')
                 .setFooter({ text: 'Alaska Executive Services' });
-            
             return interaction.reply({ embeds: [maintenance] });
         }
 
         if (commandName === 'setup') {
             if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) 
-                return interaction.reply({ content: "❌ Admin required.", ephemeral: true });
+                return interaction.reply({ content: "❌ Admin access required.", ephemeral: true });
 
             config.generalRole = interaction.options.getRole('general').id;
             config.staffRole = interaction.options.getRole('ia').id;
@@ -92,16 +69,22 @@ client.on('interactionCreate', async (interaction) => {
             saveData('./config.json', config);
 
             const panel = new EmbedBuilder()
-                .setTitle('🏛️ Support & Relations')
-                .setDescription('Select a department below to begin an inquiry.')
+                .setTitle('🏛️ Alaska Executive | Support Portal')
+                .setDescription('Please select the department that best suits your inquiry from the menu below.')
+                .addFields(
+                    { name: '❓ General Support', value: 'Assistance with server navigation, general questions, and partnership inquiries.', inline: false },
+                    { name: '👮 Internal Affairs', value: 'Handling staff misconduct reports, departmental complaints, and policy disputes.', inline: false },
+                    { name: '💎 Management', value: 'Perk claims, punishment appeals, and critical server-wide matters.', inline: false }
+                )
                 .setImage(BANNER_URL)
-                .setColor(BOT_COLOR);
+                .setColor(BOT_COLOR)
+                .setFooter({ text: 'Alaska Apex Sentinel' });
 
             const row = new ActionRowBuilder().addComponents(
-                new StringSelectMenuBuilder().setCustomId('t_menu').setPlaceholder('Select Department').addOptions([
-                    { label: 'General Support', value: 'gen', emoji: '❓' },
-                    { label: 'Internal Affairs', value: 'ia', emoji: '👮' },
-                    { label: 'Management', value: 'mgmt', emoji: '💎' }
+                new StringSelectMenuBuilder().setCustomId('t_menu').setPlaceholder('Choose a Department').addOptions([
+                    { label: 'General Support', description: 'Server help & general questions', value: 'gen', emoji: '❓' },
+                    { label: 'Internal Affairs', description: 'Staff reports & misconduct', value: 'ia', emoji: '👮' },
+                    { label: 'Management', description: 'Appeals & executive matters', value: 'mgmt', emoji: '💎' }
                 ])
             );
 
@@ -109,26 +92,33 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: "✅ System Deployed.", ephemeral: true });
         }
 
-        if (commandName === 'lockdown') {
-            if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) return;
-            await interaction.channel.permissionOverwrites.edit(interaction.guild.id, { SendMessages: false });
-            return interaction.reply("🔒 **Channel locked.**");
-        }
-
-        if (commandName === 'unlock') {
-            if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) return;
-            await interaction.channel.permissionOverwrites.edit(interaction.guild.id, { SendMessages: null });
-            return interaction.reply("🔓 **Channel unlocked.**");
+        // Help, Lockdown, Unlock logic
+        if (commandName === 'help') {
+            const help = new EmbedBuilder()
+                .setTitle('🏛️ System Directory')
+                .setDescription('Available Slash Commands:')
+                .addFields(
+                    { name: '`/setup`', value: 'Configure and deploy the support desk.' },
+                    { name: '`/embed`', value: 'Custom Embed Tool (Maintenance Mode).' },
+                    { name: '`/lockdown`', value: 'Disable sending messages for @everyone.' }
+                )
+                .setColor(BOT_COLOR);
+            return interaction.reply({ embeds: [help] });
         }
     }
 
-    // Menu Selection Logic
+    // -------------------- Ticket Logic --------------------
+
     if (interaction.isStringSelectMenu() && interaction.customId === 't_menu') {
         const value = interaction.values[0];
-        const roleId = value === 'gen' ? config.generalRole : (value === 'ia' ? config.staffRole : config.mgmtRole);
+        let roleId, deptName, deptColor;
 
-        const ch = await interaction.guild.channels.create({
-            name: `ticket-${interaction.user.username}`,
+        if (value === 'gen') { roleId = config.generalRole; deptName = "General Support"; deptColor = "#3498db"; }
+        else if (value === 'ia') { roleId = config.staffRole; deptName = "Internal Affairs"; deptColor = "#e67e22"; }
+        else { roleId = config.mgmtRole; deptName = "Management"; deptColor = "#9b59b6"; }
+
+        const channel = await interaction.guild.channels.create({
+            name: `${deptName.toLowerCase()}-${interaction.user.username}`,
             type: ChannelType.GuildText,
             permissionOverwrites: [
                 { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
@@ -137,38 +127,42 @@ client.on('interactionCreate', async (interaction) => {
             ]
         });
 
-        const closeBtn = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('close_tkt').setLabel('Resolve').setStyle(ButtonStyle.Danger));
-        await ch.send({ content: `<@&${roleId}>`, embeds: [new EmbedBuilder().setTitle("Support Requested").setDescription(`User: <@${interaction.user.id}>`).setColor(BOT_COLOR)], components: [closeBtn] });
-        return interaction.reply({ content: `✅ Created: ${ch}`, ephemeral: true });
+        const ticketEmbed = new EmbedBuilder()
+            .setTitle(`${deptName} | Inquiry Session`)
+            .setDescription(`Greetings <@${interaction.user.id}>. You have contacted the **${deptName}** department. Please describe your situation in detail while you wait for a representative.`)
+            .setColor(deptColor)
+            .setTimestamp();
+
+        const closeBtn = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('close_tkt').setLabel('Resolve Inquiry').setStyle(ButtonStyle.Danger));
+        
+        await channel.send({ content: `**Alert:** <@&${roleId}>`, embeds: [ticketEmbed], components: [closeBtn] });
+        return interaction.reply({ content: `✅ Inquiry created: ${channel}`, ephemeral: true });
     }
 
-    // Modal Closure Logic
+    // Ticket Closure (Modal)
     if (interaction.isButton() && interaction.customId === 'close_tkt') {
-        const modal = new ModalBuilder().setCustomId('rsn_mdl').setTitle('Close Ticket');
-        modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('rsn_in').setLabel("Reason").setStyle(TextInputStyle.Paragraph).setRequired(true)));
+        const modal = new ModalBuilder().setCustomId('rsn_mdl').setTitle('Finalize Resolution');
+        modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('rsn_in').setLabel("Resolution Reason").setStyle(TextInputStyle.Paragraph).setRequired(true)));
         await interaction.showModal(modal);
     }
 
     if (interaction.isModalSubmit() && interaction.customId === 'rsn_mdl') {
         const reason = interaction.fields.getTextInputValue('rsn_in');
         const log = interaction.guild.channels.cache.get(config.logChannel);
-        if (log) log.send({ embeds: [new EmbedBuilder().setTitle("Resolved").addFields({ name: "Reason", value: reason }).setColor("#ff4757")] });
-        await interaction.reply("Archiving...");
-        setTimeout(() => interaction.channel.delete().catch(() => {}), 2000);
+        if (log) log.send({ embeds: [new EmbedBuilder().setTitle("Inquiry Resolved").addFields({ name: "Resolved By", value: interaction.user.tag }, { name: "Outcome", value: reason }).setColor("#2ecc71").setTimestamp()] });
+        await interaction.reply("🔒 Session finalized. Archiving...");
+        setTimeout(() => interaction.channel.delete().catch(() => {}), 3000);
     }
 });
 
-// -------------------- Initialization --------------------
+// -------------------- Launch --------------------
 
 client.once('ready', async () => {
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
     try {
-        console.log('🔄 Registering Slash Commands...');
         await rest.put(Routes.applicationCommands(client.user.id), { body: slashCommands });
         console.log('✅ Commands Registered.');
-    } catch (error) {
-        console.error(error);
-    }
+    } catch (e) { console.error(e); }
     console.log(`✅ ${client.user.tag} Online.`);
 });
 
