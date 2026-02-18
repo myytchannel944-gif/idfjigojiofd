@@ -1,28 +1,23 @@
 require('dotenv').config();
 const fs = require('fs');
 const { 
-    Client, GatewayIntentBits, Partials, Collection, 
+    Client, GatewayIntentBits, Partials, Collection, SlashCommandBuilder,
     EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, 
     ChannelType, PermissionsBitField, StringSelectMenuBuilder, 
-    ModalBuilder, TextInputBuilder, TextInputStyle, ActivityType 
+    ModalBuilder, TextInputBuilder, TextInputStyle, REST, Routes 
 } = require('discord.js');
 const express = require('express');
 
 const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.MessageContent 
-    ],
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildMembers],
     partials: [Partials.Channel, Partials.GuildMember, Partials.Message]
 });
 
-const snipes = new Map(); 
+client.commands = new Collection();
 const BOT_COLOR = "#f6b9bc"; 
 const BANNER_URL = "https://cdn.discordapp.com/attachments/1472295068231532808/1473557629749039155/ocbvKoC.jpg?ex=6996a4fc&is=6995537c&hm=e38629356f5050e338cf33bed692c2caed54a6970a54da2ae1a0a75396cb932f&";
 
-// Data Management
+// Persistent Config
 const loadData = (file, fallback) => fs.existsSync(file) ? JSON.parse(fs.readFileSync(file)) : fallback;
 const saveData = (file, data) => fs.writeFileSync(file, JSON.stringify(data, null, 2));
 let config = loadData('./config.json', { generalRole: null, staffRole: null, mgmtRole: null, logChannel: null });
@@ -31,153 +26,150 @@ const app = express();
 app.get('/', (req, res) => res.send('System Online.'));
 app.listen(process.env.PORT || 3000);
 
-// -------------------- Command Logic --------------------
+// -------------------- Slash Command Definitions --------------------
 
-const commands = {
-    help: {
-        async execute(message) {
+const slashCommands = [
+    // Setup Command
+    new SlashCommandBuilder()
+        .setName('setup')
+        .setDescription('Deploy the support infrastructure')
+        .addRoleOption(opt => opt.setName('general').setDescription('General Support Role').setRequired(true))
+        .addRoleOption(opt => opt.setName('ia').setDescription('Internal Affairs Role').setRequired(true))
+        .addRoleOption(opt => opt.setName('management').setDescription('Management Role').setRequired(true))
+        .addChannelOption(opt => opt.setName('logs').setDescription('Log Channel').setRequired(true)),
+
+    // Embed Builder Command (with your specific message)
+    new SlashCommandBuilder()
+        .setName('embed')
+        .setDescription('Executive Embed Creator tool'),
+
+    // Lockdown/Unlock
+    new SlashCommandBuilder().setName('lockdown').setDescription('Restrict channel access'),
+    new SlashCommandBuilder().setName('unlock').setDescription('Restore channel access'),
+    
+    // Help
+    new SlashCommandBuilder().setName('help').setDescription('View available commands')
+].map(command => command.toJSON());
+
+// -------------------- Interaction Handling --------------------
+
+client.on('interactionCreate', async (interaction) => {
+    if (interaction.isChatInputCommand()) {
+        const { commandName } = interaction;
+
+        if (commandName === 'help') {
             const help = new EmbedBuilder()
                 .setTitle('🏛️ System Directory')
-                .setDescription('The following keywords are active (no prefix required):')
+                .setDescription('Use `/` to access the following executive commands:')
                 .addFields(
-                    { name: '`setup`', value: 'Deploy the support panel. Mention 3 roles and 1 channel.' },
-                    { name: '`embed`', value: 'Executive Embed Builder (Under Maintenance).' },
-                    { name: '`lockdown` / `unlock`', value: 'Manage channel permissions.' },
-                    { name: '`snipe`', value: 'Recover the last deleted message.' }
+                    { name: '`/setup`', value: 'Deploy the inquiry panel with banner.' },
+                    { name: '`/embed`', value: 'Create custom executive embeds.' },
+                    { name: '`/lockdown` / `/unlock`', value: 'Manage channel permissions.' }
                 )
                 .setColor(BOT_COLOR);
-            await message.reply({ embeds: [help] });
+            return interaction.reply({ embeds: [help] });
         }
-    },
 
-    embed: {
-        async execute(message) {
-            // Maintenance Message as requested
-            const maintenanceEmbed = new EmbedBuilder()
+        if (commandName === 'embed') {
+            // Your requested "Maintenance" message
+            const maintenance = new EmbedBuilder()
                 .setTitle('⚠️ System Notice')
                 .setDescription('Sorry, the bot did not respond. Please contact the owner.')
                 .setColor('#f1c40f')
                 .setFooter({ text: 'Alaska Executive Services' });
             
-            await message.reply({ embeds: [maintenanceEmbed] });
+            return interaction.reply({ embeds: [maintenance] });
         }
-    },
 
-    setup: {
-        async execute(message) {
-            if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
+        if (commandName === 'setup') {
+            if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) 
+                return interaction.reply({ content: "❌ Admin required.", ephemeral: true });
 
-            const roles = message.mentions.roles;
-            const channel = message.mentions.channels.first();
-
-            if (roles.size < 3 || !channel) {
-                return message.reply("⚠️ **Setup Error:** Mention 3 roles and 1 channel.\nExample: `setup @General @IA @Mgmt #logs` ");
-            }
-
-            config = { generalRole: roles.at(0).id, staffRole: roles.at(1).id, mgmtRole: roles.at(2).id, logChannel: channel.id };
+            config.generalRole = interaction.options.getRole('general').id;
+            config.staffRole = interaction.options.getRole('ia').id;
+            config.mgmtRole = interaction.options.getRole('management').id;
+            config.logChannel = interaction.options.getChannel('logs').id;
             saveData('./config.json', config);
 
             const panel = new EmbedBuilder()
                 .setTitle('🏛️ Support & Relations')
-                .setDescription('Please select a department below to begin an inquiry.')
+                .setDescription('Select a department below to begin an inquiry.')
                 .setImage(BANNER_URL)
                 .setColor(BOT_COLOR);
 
-            const menus = [
-                new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('t_gen').setPlaceholder('General Support').addOptions([{ label: 'General Inquiry', value: 'gen', emoji: '❓' }])),
-                new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('t_ia').setPlaceholder('Internal Affairs').addOptions([{ label: 'Staff Report', value: 'ia', emoji: '👮' }])),
-                new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('t_mgmt').setPlaceholder('Management').addOptions([{ label: 'Executive Matter', value: 'mgmt', emoji: '💎' }]))
-            ];
+            const row = new ActionRowBuilder().addComponents(
+                new StringSelectMenuBuilder().setCustomId('t_menu').setPlaceholder('Select Department').addOptions([
+                    { label: 'General Support', value: 'gen', emoji: '❓' },
+                    { label: 'Internal Affairs', value: 'ia', emoji: '👮' },
+                    { label: 'Management', value: 'mgmt', emoji: '💎' }
+                ])
+            );
 
-            await message.channel.send({ embeds: [panel], components: menus });
-            await message.reply("✅ Infrastructure deployed successfully.");
+            await interaction.channel.send({ embeds: [panel], components: [row] });
+            return interaction.reply({ content: "✅ System Deployed.", ephemeral: true });
         }
-    },
 
-    lockdown: {
-        async execute(message) {
-            if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) return;
-            await message.channel.permissionOverwrites.edit(message.guild.id, { SendMessages: false });
-            await message.reply("🔒 **Channel locked.**");
+        if (commandName === 'lockdown') {
+            if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) return;
+            await interaction.channel.permissionOverwrites.edit(interaction.guild.id, { SendMessages: false });
+            return interaction.reply("🔒 **Channel locked.**");
         }
-    },
 
-    unlock: {
-        async execute(message) {
-            if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) return;
-            await message.channel.permissionOverwrites.edit(message.guild.id, { SendMessages: null });
-            await message.reply("🔓 **Channel unlocked.**");
-        }
-    },
-
-    snipe: {
-        async execute(message) {
-            const msg = snipes.get(message.channel.id);
-            if (!msg) return message.reply("Nothing to snipe.");
-            const snipeEmbed = new EmbedBuilder().setAuthor({ name: msg.author }).setDescription(msg.content).setColor(BOT_COLOR);
-            await message.reply({ embeds: [snipeEmbed] });
+        if (commandName === 'unlock') {
+            if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) return;
+            await interaction.channel.permissionOverwrites.edit(interaction.guild.id, { SendMessages: null });
+            return interaction.reply("🔓 **Channel unlocked.**");
         }
     }
-};
 
-// -------------------- Event Handling --------------------
+    // Menu Selection Logic
+    if (interaction.isStringSelectMenu() && interaction.customId === 't_menu') {
+        const value = interaction.values[0];
+        const roleId = value === 'gen' ? config.generalRole : (value === 'ia' ? config.staffRole : config.mgmtRole);
 
-client.on('messageCreate', async (message) => {
-    if (message.author.bot) return;
-
-    const args = message.content.trim().split(/ +/);
-    const cmd = args.shift().toLowerCase();
-
-    if (commands[cmd]) {
-        try {
-            await commands[cmd].execute(message, args);
-        } catch (err) {
-            console.error(err);
-        }
-    }
-});
-
-client.on('interactionCreate', async (int) => {
-    if (int.isStringSelectMenu() && int.customId.startsWith('t_')) {
-        let rId = int.customId === 't_gen' ? config.generalRole : (int.customId === 't_ia' ? config.staffRole : config.mgmtRole);
-        
-        const c = await int.guild.channels.create({
-            name: `ticket-${int.user.username}`,
+        const ch = await interaction.guild.channels.create({
+            name: `ticket-${interaction.user.username}`,
             type: ChannelType.GuildText,
             permissionOverwrites: [
-                { id: int.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-                { id: int.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-                { id: rId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
+                { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+                { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+                { id: roleId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
             ]
         });
 
-        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('close_tkt').setLabel('Resolve').setStyle(ButtonStyle.Danger));
-        await c.send({ content: `<@&${rId}>`, embeds: [new EmbedBuilder().setTitle("Support Requested").setDescription(`User: <@${int.user.id}>`).setColor(BOT_COLOR)], components: [row] });
-        await int.reply({ content: `✅ Created: ${c}`, ephemeral: true });
+        const closeBtn = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('close_tkt').setLabel('Resolve').setStyle(ButtonStyle.Danger));
+        await ch.send({ content: `<@&${roleId}>`, embeds: [new EmbedBuilder().setTitle("Support Requested").setDescription(`User: <@${interaction.user.id}>`).setColor(BOT_COLOR)], components: [closeBtn] });
+        return interaction.reply({ content: `✅ Created: ${ch}`, ephemeral: true });
     }
 
-    if (int.isButton() && int.customId === 'close_tkt') {
+    // Modal Closure Logic
+    if (interaction.isButton() && interaction.customId === 'close_tkt') {
         const modal = new ModalBuilder().setCustomId('rsn_mdl').setTitle('Close Ticket');
         modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('rsn_in').setLabel("Reason").setStyle(TextInputStyle.Paragraph).setRequired(true)));
-        await int.showModal(modal);
+        await interaction.showModal(modal);
     }
 
-    if (int.isModalSubmit() && int.customId === 'rsn_mdl') {
-        const reason = int.fields.getTextInputValue('rsn_in');
-        const log = int.guild.channels.cache.get(config.logChannel);
+    if (interaction.isModalSubmit() && interaction.customId === 'rsn_mdl') {
+        const reason = interaction.fields.getTextInputValue('rsn_in');
+        const log = interaction.guild.channels.cache.get(config.logChannel);
         if (log) log.send({ embeds: [new EmbedBuilder().setTitle("Resolved").addFields({ name: "Reason", value: reason }).setColor("#ff4757")] });
-        await int.reply("Archiving...");
-        setTimeout(() => int.channel.delete().catch(() => {}), 2000);
+        await interaction.reply("Archiving...");
+        setTimeout(() => interaction.channel.delete().catch(() => {}), 2000);
     }
 });
 
-client.on('messageDelete', m => {
-    if (!m.author?.bot && m.content) snipes.set(m.channel.id, { content: m.content, author: m.author.tag });
-});
+// -------------------- Initialization --------------------
 
-client.once('ready', () => {
-    console.log(`✅ ${client.user.tag} Online | No Prefix Mode`);
-    client.user.setActivity('Alaska Support', { type: ActivityType.Watching });
+client.once('ready', async () => {
+    const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+    try {
+        console.log('🔄 Registering Slash Commands...');
+        await rest.put(Routes.applicationCommands(client.user.id), { body: slashCommands });
+        console.log('✅ Commands Registered.');
+    } catch (error) {
+        console.error(error);
+    }
+    console.log(`✅ ${client.user.tag} Online.`);
 });
 
 client.login(process.env.TOKEN);
