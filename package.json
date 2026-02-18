@@ -9,8 +9,8 @@
   "author": "Noah Diaz",
   "license": "MIT",
   "dependencies": {
-    "discord.js": "^15.0.0",
-    "dotenv": "^16.0.0",
+    "discord.js": "^14.15.0",
+    "dotenv": "^16.3.1",
     "fs": "0.0.1-security"
   }
 }
