@@ -1,4 +1,4 @@
-// alaska-bot all-in-one with auto slash command registration
+// alaska-bot all-in-one with auto slash command registration + embed builder
 const { Client, GatewayIntentBits, Partials, Collection, SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ChannelType, PermissionsBitField, ButtonBuilder, ButtonStyle, REST, Routes } = require('discord.js');
 require('dotenv').config();
 const fs = require('fs');
@@ -60,6 +60,42 @@ client.commands.set('panel', {
     }
 });
 
+// -------------------- /embedbuilder command --------------------
+client.commands.set('embedbuilder', {
+    data: new SlashCommandBuilder()
+        .setName('embedbuilder')
+        .setDescription('Create a live interactive embed/dashboard'),
+    async execute(interaction) {
+        // Initial empty embed
+        let embed = new EmbedBuilder()
+            .setTitle('Interactive Dashboard')
+            .setDescription('Use the buttons & dropdowns to edit this embed live')
+            .setColor(BOT_COLOR)
+            .setTimestamp()
+            .setFooter({ text: 'Alaska Management Embed Builder' });
+
+        // Buttons for live editing
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('add_field').setLabel('Add Field').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('remove_field').setLabel('Remove Field').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId('change_color').setLabel('Change Color').setStyle(ButtonStyle.Secondary)
+        );
+
+        // Dropdown for preset options
+        const menu = new StringSelectMenuBuilder()
+            .setCustomId('embed_menu')
+            .setPlaceholder('Choose action')
+            .addOptions([
+                { label: 'Add Button', value: 'add_button' },
+                { label: 'Add Dropdown', value: 'add_dropdown' }
+            ]);
+
+        const menuRow = new ActionRowBuilder().addComponents(menu);
+
+        await interaction.reply({ embeds: [embed], components: [row, menuRow] });
+    }
+});
+
 // -------------------- Interaction handler --------------------
 client.on('interactionCreate', async interaction => {
     if (interaction.isChatInputCommand()) {
@@ -102,22 +138,28 @@ client.on('interactionCreate', async interaction => {
         logChannel.send({ content: `Ticket closed: ${interaction.channel.name}`, files: [transcript] });
         setTimeout(() => interaction.channel.delete(), 3000);
     }
+
+    // -------------------- Interactive Embed Buttons --------------------
+    if (interaction.isButton() || interaction.isStringSelectMenu()) {
+        // For simplicity, we just acknowledge clicks here — can extend to full live editing later
+        await interaction.reply({ content: 'Embed interaction clicked! (Live editing coming soon)', ephemeral: true });
+    }
 });
 
 // -------------------- Ready --------------------
 client.once('ready', async () => {
     console.log(`Logged in as ${client.user.tag}`);
 
-    // -------------------- Register slash command --------------------
+    // Register slash commands globally
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-    const commands = [client.commands.get('panel').data.toJSON()];
+    const commands = Array.from(client.commands.values()).map(cmd => cmd.data.toJSON());
 
     try {
         await rest.put(
             Routes.applicationCommands(client.user.id),
             { body: commands }
         );
-        console.log('✅ /panel command registered globally!');
+        console.log('✅ Slash commands registered globally!');
     } catch (err) {
         console.error('❌ Failed to register commands:', err);
     }
