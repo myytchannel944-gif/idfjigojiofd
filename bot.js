@@ -10,19 +10,14 @@ const {
 const express = require('express');
 
 const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds, 
-        GatewayIntentBits.GuildMessages, 
-        GatewayIntentBits.MessageContent, 
-        GatewayIntentBits.GuildMembers
-    ],
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers],
     partials: [Partials.Channel, Partials.Message]
 });
 
 const BOT_COLOR = "#de8ef4"; 
 client.commands = new Collection();
 
-// -------------------- Express server for Hosting --------------------
+// -------------------- Express server for Railway --------------------
 const app = express();
 const PORT = process.env.PORT || 3000;
 app.get('/', (req, res) => res.send('Alaska Management Bot is online.'));
@@ -51,119 +46,109 @@ async function ensureCategoryAndLog(guild) {
 
 // -------------------- Commands --------------------
 
-// 1. Ticket Panel
 client.commands.set('panel', {
     data: new SlashCommandBuilder().setName('panel').setDescription('Send ticket panel'),
     async execute(interaction) {
-        const embed = new EmbedBuilder()
-            .setTitle('🎫 Alaska Management Support')
-            .setDescription('Select a category below to open a ticket.')
-            .setColor(BOT_COLOR);
-        const menu = new StringSelectMenuBuilder()
-            .setCustomId('ticket_menu')
-            .setPlaceholder('Select ticket type...')
-            .addOptions([
-                { label: 'Support', value: 'support', emoji: '🛠️' },
-                { label: 'Report', value: 'report', emoji: '🚩' },
-                { label: 'Application', value: 'apply', emoji: '📝' }
-            ]);
+        const embed = new EmbedBuilder().setTitle('🎫 Alaska Management Support').setDescription('Select a category below to open a ticket.').setColor(BOT_COLOR);
+        const menu = new StringSelectMenuBuilder().setCustomId('ticket_menu').setPlaceholder('Select ticket type...')
+            .addOptions([{ label: 'Support', value: 'support', emoji: '🛠️' }, { label: 'Report', value: 'report', emoji: '🚩' }, { label: 'Application', value: 'apply', emoji: '📝' }]);
         await interaction.reply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)] });
     }
 });
 
-// 2. Interactive (New!)
-client.commands.set('interactive', {
-    data: new SlashCommandBuilder().setName('interactive').setDescription('Send embed with private buttons and dropdowns'),
+client.commands.set('embedbuilder', {
+    data: new SlashCommandBuilder().setName('embedbuilder').setDescription('Discohook-style interactive creator'),
     async execute(interaction) {
-        const embed = new EmbedBuilder()
-            .setTitle('Alaska Management | Private Menu')
-            .setDescription('Click a button or select an option to see a message only you can see.')
-            .setColor(BOT_COLOR);
+        const embed = new EmbedBuilder().setTitle('Preview: New Embed').setDescription('Use the buttons below to customize this message.').setColor(BOT_COLOR);
 
-        const buttons = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('btn_private').setLabel('Secret Message').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId('btn_info').setLabel('Bot Info').setStyle(ButtonStyle.Secondary)
+        const row1 = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('edit_main').setLabel('Edit Content').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('edit_media').setLabel('Add Media').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('edit_footer').setLabel('Edit Footer').setStyle(ButtonStyle.Primary)
         );
 
-        const dropdown = new ActionRowBuilder().addComponents(
-            new StringSelectMenuBuilder()
-                .setCustomId('private_dropdown')
-                .setPlaceholder('Pick a hidden category...')
+        const row2 = new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder().setCustomId('edit_color').setPlaceholder('Choose Embed Color')
                 .addOptions([
-                    { label: 'Rules', value: 'opt_rules', description: 'View server rules privately' },
-                    { label: 'Staff', value: 'opt_staff', description: 'View staff info privately' }
+                    { label: 'Purple', value: '#de8ef4' }, { label: 'Red', value: '#ff0000' }, 
+                    { label: 'Green', value: '#00ff00' }, { label: 'Blue', value: '#0000ff' }, { label: 'Gold', value: '#ffd700' }
                 ])
         );
 
-        await interaction.reply({ embeds: [embed], components: [buttons, dropdown] });
-    }
-});
-
-// 3. Embed Builder
-client.commands.set('embedbuilder', {
-    data: new SlashCommandBuilder().setName('embedbuilder').setDescription('Create a custom embed'),
-    async execute(interaction) {
-        const embed = new EmbedBuilder().setTitle('New Embed').setDescription('Editing...').setColor(BOT_COLOR);
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('edit_embed_main').setLabel('Edit Content').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId('finish_embed').setLabel('Post to Channel').setStyle(ButtonStyle.Success)
+        const row3 = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('finish_embed').setLabel('🚀 Post to Channel').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId('reset_embed').setLabel('🗑️ Reset').setStyle(ButtonStyle.Danger)
         );
-        await interaction.reply({ content: 'Use the buttons below.', embeds: [embed], components: [row], ephemeral: true });
+
+        await interaction.reply({ content: '### 🎨 Alaska Embed Designer', embeds: [embed], components: [row1, row2, row3], ephemeral: true });
     }
 });
 
-// -------------------- Combined Interaction Handler --------------------
+// -------------------- Interaction Handler --------------------
 client.on('interactionCreate', async interaction => {
-    // Handling Slash Commands
     if (interaction.isChatInputCommand()) {
         const command = client.commands.get(interaction.commandName);
         if (command) await command.execute(interaction).catch(console.error);
     }
 
-    // Handling Buttons
     if (interaction.isButton()) {
-        if (interaction.customId === 'btn_private') {
-            return await interaction.reply({ content: '🤫 This is a private message! No one else can see this.', ephemeral: true });
-        }
-        if (interaction.customId === 'btn_info') {
-            return await interaction.reply({ content: '🤖 Alaska Management Bot v2.0 - Running on Railway.', ephemeral: true });
+        const currentEmbed = interaction.message.embeds[0];
+        if (!currentEmbed) return;
+
+        if (interaction.customId === 'edit_main') {
+            const modal = new ModalBuilder().setCustomId('modal_main').setTitle('Edit Content');
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('title').setLabel('Title').setStyle(TextInputStyle.Short).setValue(currentEmbed.title || '')),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('desc').setLabel('Description').setStyle(TextInputStyle.Paragraph).setValue(currentEmbed.description || ''))
+            );
+            return await interaction.showModal(modal);
         }
 
-        // Ticket & Embed Builder Logic
+        if (interaction.customId === 'edit_media') {
+            const modal = new ModalBuilder().setCustomId('modal_media').setTitle('Edit Media');
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('thumb').setLabel('Thumbnail URL').setStyle(TextInputStyle.Short).setRequired(false)),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('image').setLabel('Big Image URL').setStyle(TextInputStyle.Short).setRequired(false))
+            );
+            return await interaction.showModal(modal);
+        }
+
+        if (interaction.customId === 'edit_footer') {
+            const modal = new ModalBuilder().setCustomId('modal_footer').setTitle('Edit Footer');
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('footer').setLabel('Footer Text').setStyle(TextInputStyle.Short).setRequired(false)),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('icon').setLabel('Footer Icon URL').setStyle(TextInputStyle.Short).setRequired(false))
+            );
+            return await interaction.showModal(modal);
+        }
+
+        if (interaction.customId === 'reset_embed') {
+            return await interaction.update({ embeds: [new EmbedBuilder().setTitle('Preview: New Embed').setDescription('Reset.').setColor(BOT_COLOR)] });
+        }
+
+        if (interaction.customId === 'finish_embed') {
+            await interaction.channel.send({ embeds: [EmbedBuilder.from(currentEmbed)] });
+            return await interaction.update({ content: '✅ Embed Posted!', components: [], embeds: [] });
+        }
+
+        // Ticket Closing
         if (interaction.customId === 'close_ticket') {
             const { logChannel } = await ensureCategoryAndLog(interaction.guild);
             await interaction.reply('Closing in 5 seconds... Generating transcript.');
             const file = await createTranscript(interaction.channel);
             await logChannel.send({ content: `Ticket closed by ${interaction.user.tag}`, files: [file] });
-            setTimeout(() => { interaction.channel.delete().catch(() => {}); }, 5000);
-        }
-
-        if (interaction.customId === 'edit_embed_main') {
-            const modal = new ModalBuilder().setCustomId('embed_modal').setTitle('Embed Designer');
-            const titleInput = new TextInputBuilder().setCustomId('title').setLabel('Title').setStyle(TextInputStyle.Short);
-            const descInput = new TextInputBuilder().setCustomId('desc').setLabel('Description').setStyle(TextInputStyle.Paragraph);
-            modal.addComponents(new ActionRowBuilder().addComponents(titleInput), new ActionRowBuilder().addComponents(descInput));
-            await interaction.showModal(modal);
-        }
-
-        if (interaction.customId === 'finish_embed') {
-            const receivedEmbed = interaction.message.embeds[0];
-            await interaction.channel.send({ embeds: [EmbedBuilder.from(receivedEmbed)] });
-            await interaction.update({ content: '✅ Embed Posted!', components: [], embeds: [] });
+            setTimeout(() => { interaction.channel.delete().catch(() => {}); if (fs.existsSync(file)) fs.unlinkSync(file); }, 5000);
         }
     }
 
-    // Handling Dropdowns
     if (interaction.isStringSelectMenu()) {
-        if (interaction.customId === 'private_dropdown') {
-            const val = interaction.values[0];
-            let response = 'You selected an option!';
-            if (val === 'opt_rules') response = '📜 **Rules:** 1. No spam. 2. Be respectful. 3. Follow Discord ToS.';
-            if (val === 'opt_staff') response = '👥 **Staff:** Contact an Admin or Moderator for assistance.';
-            return await interaction.reply({ content: response, ephemeral: true });
+        const currentEmbed = interaction.message.embeds[0];
+
+        if (interaction.customId === 'edit_color') {
+            const updated = EmbedBuilder.from(currentEmbed).setColor(interaction.values[0]);
+            return await interaction.update({ embeds: [updated] });
         }
 
-        // Ticket Logic
         if (interaction.customId === 'ticket_menu') {
             const { category, staffRole } = await ensureCategoryAndLog(interaction.guild);
             const channel = await interaction.guild.channels.create({
@@ -181,12 +166,25 @@ client.on('interactionCreate', async interaction => {
         }
     }
 
-    // Handling Modals
-    if (interaction.isModalSubmit() && interaction.customId === 'embed_modal') {
-        const title = interaction.fields.getTextInputValue('title');
-        const desc = interaction.fields.getTextInputValue('desc');
-        const newEmbed = new EmbedBuilder().setTitle(title).setDescription(desc).setColor(BOT_COLOR);
-        await interaction.update({ embeds: [newEmbed] });
+    if (interaction.isModalSubmit()) {
+        const currentEmbed = interaction.message.embeds[0];
+        const updated = EmbedBuilder.from(currentEmbed);
+
+        if (interaction.customId === 'modal_main') {
+            updated.setTitle(interaction.fields.getTextInputValue('title')).setDescription(interaction.fields.getTextInputValue('desc'));
+        }
+        if (interaction.customId === 'modal_media') {
+            const t = interaction.fields.getTextInputValue('thumb');
+            const i = interaction.fields.getTextInputValue('image');
+            if (t) updated.setThumbnail(t);
+            if (i) updated.setImage(i);
+        }
+        if (interaction.customId === 'modal_footer') {
+            const f = interaction.fields.getTextInputValue('footer');
+            const icon = interaction.fields.getTextInputValue('icon');
+            updated.setFooter({ text: f || ' ', iconURL: icon || null });
+        }
+        await interaction.update({ embeds: [updated] });
     }
 });
 
@@ -197,7 +195,7 @@ client.once('ready', async () => {
     try {
         const commands = Array.from(client.commands.values()).map(cmd => cmd.data.toJSON());
         await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
-        console.log('✅ Slash Commands Synchronized');
+        console.log('✅ Discohook-Style Builder Ready!');
     } catch (err) { console.error(err); }
 });
 
