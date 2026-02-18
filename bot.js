@@ -12,8 +12,8 @@ const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.GuildMembers, // Ensure this is enabled in Dev Portal
-        GatewayIntentBits.MessageContent // Ensure this is enabled in Dev Portal
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.MessageContent 
     ],
     partials: [Partials.Channel, Partials.GuildMember, Partials.Message]
 });
@@ -21,15 +21,15 @@ const client = new Client({
 const snipes = new Map(); 
 const BOT_COLOR = "#f6b9bc"; 
 const PREFIX = ".";
-
 const BANNER_URL = "https://cdn.discordapp.com/attachments/1472295068231532808/1473557629749039155/ocbvKoC.jpg?ex=6996a4fc&is=6995537c&hm=e38629356f5050e338cf33bed692c2caed54a6970a54da2ae1a0a75396cb932f&";
 
+// Data Management
 const loadData = (file, fallback) => fs.existsSync(file) ? JSON.parse(fs.readFileSync(file)) : fallback;
 const saveData = (file, data) => fs.writeFileSync(file, JSON.stringify(data, null, 2));
 let config = loadData('./config.json', { generalRole: null, staffRole: null, mgmtRole: null, logChannel: null });
 
 const app = express();
-app.get('/', (req, res) => res.send('Alaska Apex Sentinel is live.'));
+app.get('/', (req, res) => res.send('System Online.'));
 app.listen(process.env.PORT || 3000);
 
 // -------------------- Commands --------------------
@@ -37,167 +37,114 @@ app.listen(process.env.PORT || 3000);
 const commands = {
     help: {
         async execute(message) {
-            const helpEmbed = new EmbedBuilder()
-                .setTitle('🏛️ System Command Directory')
-                .setDescription('List of administrative and utility commands.')
+            const help = new EmbedBuilder()
+                .setTitle('🏛️ Command Directory')
                 .addFields(
-                    { name: '`.setup`', value: 'Deploy support panel. \n*Usage: .setup @General @IA @Management #logs*' },
-                    { name: '`.lockdown`', value: 'Lock current channel.' },
-                    { name: '`.unlock`', value: 'Unlock current channel.' },
-                    { name: '`.snipe`', value: 'View last deleted message.' }
+                    { name: '`.setup`', value: 'Deploy support panel. Requires: Admin' },
+                    { name: '`.embed`', value: 'Create a custom executive embed message.' },
+                    { name: '`.lockdown` / `.unlock`', value: 'Manage channel access.' },
+                    { name: '`.snipe`', value: 'View recently deleted message.' }
                 )
                 .setColor(BOT_COLOR);
-            await message.reply({ embeds: [helpEmbed] });
+            await message.reply({ embeds: [help] });
+        }
+    },
+
+    embed: {
+        async execute(message) {
+            if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return;
+            
+            const modal = new ModalBuilder().setCustomId('embed_builder_modal').setTitle('Executive Embed Creator');
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('e_title').setLabel("Title").setStyle(TextInputStyle.Short).setRequired(true)),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('e_desc').setLabel("Description").setStyle(TextInputStyle.Paragraph).setRequired(true)),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('e_color').setLabel("Hex Color (Default: #f6b9bc)").setStyle(TextInputStyle.Short).setRequired(false))
+            );
+            // Modal can only be shown via Interaction. For Prefix, we'll use a simple argument method or prompt.
+            // Simplified for Prefix usage:
+            message.reply("💡 **Tip:** To build an embed, use `.embed [Title] | [Description]`\n*Example: .embed Welcome | Thanks for joining us!*");
+            
+            const args = message.content.slice(PREFIX.length + 5).split('|');
+            if (args.length < 2) return;
+
+            const customEmbed = new EmbedBuilder()
+                .setTitle(args[0].trim())
+                .setDescription(args[1].trim())
+                .setColor(BOT_COLOR)
+                .setTimestamp();
+            
+            await message.channel.send({ embeds: [customEmbed] });
+            await message.delete();
         }
     },
 
     setup: {
-        async execute(message, args) {
-            // Permission Check
+        async execute(message) {
             if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-                return message.reply("❌ **Access Denied:** You need Administrator permissions to run this.");
+                return message.reply("❌ Admin access required.");
             }
 
-            // Enhanced Detection
-            const genRole = message.mentions.roles.at(0);
-            const iaRole = message.mentions.roles.at(1);
-            const mgRole = message.mentions.roles.at(2);
-            const logCh = message.mentions.channels.first();
+            const roles = message.mentions.roles;
+            const channel = message.mentions.channels.first();
 
-            if (!genRole || !iaRole || !mgRole || !logCh) {
-                return message.reply({
-                    embeds: [new EmbedBuilder()
-                        .setTitle("⚠️ Setup Error")
-                        .setDescription("Please mention all roles and the log channel in order.")
-                        .addFields({ name: "Required Order", value: "`.setup @General @InternalAffairs @Management #logs`" })
-                        .setColor("#ff4757")]
-                });
+            if (roles.size < 3 || !channel) {
+                return message.reply("⚠️ **Setup Error:** Mention 3 roles and 1 log channel.\nOrder: `@General @IA @Mgmt #logs` ");
             }
 
-            config = { generalRole: genRole.id, staffRole: iaRole.id, mgmtRole: mgRole.id, logChannel: logCh.id };
+            config = { generalRole: roles.at(0).id, staffRole: roles.at(1).id, mgmtRole: roles.at(2).id, logChannel: channel.id };
             saveData('./config.json', config);
 
-            const mainEmbed = new EmbedBuilder()
+            const panel = new EmbedBuilder()
                 .setTitle('🏛️ Support & Relations')
-                .setDescription('Please select a department below to open an inquiry.')
+                .setDescription('Select a department below to begin an inquiry.')
                 .setImage(BANNER_URL)
                 .setColor(BOT_COLOR);
 
-            const menus = [
-                new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('ticket_general').setPlaceholder('General Support').addOptions([
-                    { label: 'General Questions', value: 'General Questions', emoji: '❓' },
-                    { label: 'Member Reports', value: 'Member Reports', emoji: '👥' },
-                    { label: 'Server Bugs', value: 'Server Bugs', emoji: '🐛' },
-                    { label: 'Partnerships', value: 'Partnerships', emoji: '🤝' }
-                ])),
-                new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('ticket_ia').setPlaceholder('Internal Affairs').addOptions([
-                    { label: 'Staff Reports', value: 'Staff Reports', emoji: '👮' },
-                    { label: 'Staff Appeals', value: 'Staff Appeals', emoji: '⚖️' },
-                    { label: 'Severe Matters', value: 'Severe Matters', emoji: '⚠️' }
-                ])),
-                new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('ticket_mgmt').setPlaceholder('Management').addOptions([
-                    { label: 'Claiming Perks', value: 'Claiming Perks', emoji: '💎' },
-                    { label: 'Appealing Punishments', value: 'Appealing Punishments', emoji: '🔨' }
-                ]))
-            ];
+            const row1 = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('t_gen').setPlaceholder('General Support').addOptions([{ label: 'General Questions', value: 'q', emoji: '❓' }, { label: 'Reports', value: 'r', emoji: '👥' }]));
+            const row2 = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('t_ia').setPlaceholder('Internal Affairs').addOptions([{ label: 'Staff Reports', value: 'sr', emoji: '👮' }]));
+            const row3 = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('t_mgmt').setPlaceholder('Management').addOptions([{ label: 'Perks', value: 'p', emoji: '💎' }]));
 
-            await message.channel.send({ embeds: [mainEmbed], components: menus });
-            await message.reply("✅ **Infrastructure successfully deployed.**");
-        }
-    },
-
-    lockdown: {
-        async execute(message) {
-            if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) return;
-            await message.channel.permissionOverwrites.edit(message.guild.id, { SendMessages: false });
-            await message.reply("🔒 **Channel locked.**");
-        }
-    },
-
-    unlock: {
-        async execute(message) {
-            if (!message.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) return;
-            await message.channel.permissionOverwrites.edit(message.guild.id, { SendMessages: null });
-            await message.reply("🔓 **Channel unlocked.**");
-        }
-    },
-
-    snipe: {
-        async execute(message) {
-            const msg = snipes.get(message.channel.id);
-            if (!msg) return message.reply("No message to snipe.");
-            const snipeEmbed = new EmbedBuilder()
-                .setAuthor({ name: msg.author, iconURL: msg.avatar })
-                .setDescription(msg.content)
-                .setFooter({ text: `Sent at ${msg.time}` })
-                .setColor(BOT_COLOR);
-            await message.reply({ embeds: [snipeEmbed] });
+            await message.channel.send({ embeds: [panel], components: [row1, row2, row3] });
+            await message.reply("✅ System Deployed.");
         }
     }
 };
 
 // -------------------- Events --------------------
 
-client.on('messageCreate', async message => {
-    if (message.author.bot || !message.content.startsWith(PREFIX)) return;
+client.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
 
-    const args = message.content.slice(PREFIX.length).trim().split(/ +/);
-    const commandName = args.shift().toLowerCase();
-
-    if (commands[commandName]) {
-        try {
-            await commands[commandName].execute(message, args);
-        } catch (error) {
-            console.error(error);
-            message.reply("There was an error trying to execute that command.");
-        }
+    // This checks if the bot can even see the message
+    if (message.content.startsWith(PREFIX)) {
+        const args = message.content.slice(PREFIX.length).trim().split(/ +/);
+        const cmd = args.shift().toLowerCase();
+        if (commands[cmd]) await commands[cmd].execute(message, args);
     }
 });
 
-client.on('interactionCreate', async interaction => {
-    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('ticket_')) {
-        const cat = interaction.values[0];
-        let roleId, dept;
-
-        if (interaction.customId === 'ticket_general') { roleId = config.generalRole; dept = "General Support"; }
-        else if (interaction.customId === 'ticket_ia') { roleId = config.staffRole; dept = "Internal Affairs"; }
-        else { roleId = config.mgmtRole; dept = "Management"; }
-
-        const channel = await interaction.guild.channels.create({
-            name: `${cat.replace(/\s+/g, '-')}-${interaction.user.username}`.toLowerCase(),
+client.on('interactionCreate', async (int) => {
+    if (int.isStringSelectMenu() && int.customId.startsWith('t_')) {
+        let rId = int.customId === 't_gen' ? config.generalRole : (int.customId === 't_ia' ? config.staffRole : config.mgmtRole);
+        
+        const c = await int.guild.channels.create({
+            name: `ticket-${int.user.username}`,
             type: ChannelType.GuildText,
             permissionOverwrites: [
-                { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-                { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-                { id: roleId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
+                { id: int.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+                { id: int.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+                { id: rId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
             ]
         });
 
-        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('close_tkt').setLabel('Resolve').setStyle(ButtonStyle.Danger));
-        await channel.send({ content: `<@&${roleId}>`, embeds: [new EmbedBuilder().setTitle(`Support: ${cat}`).setDescription(`Inquiry opened by <@${interaction.user.id}>.`).setColor(BOT_COLOR)], components: [row] });
-        await interaction.reply({ content: `✅ Ticket created: ${channel}`, ephemeral: true });
-    }
-
-    if (interaction.isButton() && interaction.customId === 'close_tkt') {
-        const modal = new ModalBuilder().setCustomId('reason_mdl').setTitle('Close Ticket');
-        modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('reason_in').setLabel("Resolution Reason").setStyle(TextInputStyle.Paragraph).setRequired(true)));
-        await interaction.showModal(modal);
-    }
-
-    if (interaction.isModalSubmit() && interaction.customId === 'reason_mdl') {
-        const reason = interaction.fields.getTextInputValue('reason_in');
-        const log = interaction.guild.channels.cache.get(config.logChannel);
-        if (log) log.send({ embeds: [new EmbedBuilder().setTitle("Ticket Closed").addFields({ name: "By", value: interaction.user.tag }, { name: "Reason", value: reason }).setColor("#ff4757")] });
-        await interaction.reply("Closing...");
-        setTimeout(() => interaction.channel.delete(), 2000);
+        await c.send({ content: `<@&${rId}>`, embeds: [new EmbedBuilder().setTitle("Support Requested").setDescription(`User: <@${int.user.id}>`).setColor(BOT_COLOR)] });
+        await int.reply({ content: `✅ Created: ${c}`, ephemeral: true });
     }
 });
 
-client.on('messageDelete', m => {
-    if (!m.author?.bot && m.content) {
-        snipes.set(m.channel.id, { content: m.content, author: m.author.tag, avatar: m.author.displayAvatarURL(), time: m.createdAt.toLocaleString() });
-    }
+client.once('ready', () => {
+    console.log(`✅ ${client.user.tag} is Online.`);
+    console.log(`Intents Enabled: ${client.options.intents}`);
 });
 
-client.once('ready', () => console.log(`✅ Sentinel Online | Prefix: ${PREFIX}`));
 client.login(process.env.TOKEN);
