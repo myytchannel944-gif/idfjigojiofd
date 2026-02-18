@@ -1,11 +1,24 @@
 // alaska-bot all-in-one with auto slash command registration
 const { 
-    Client, GatewayIntentBits, Partials, Collection, SlashCommandBuilder, EmbedBuilder, 
-    ActionRowBuilder, StringSelectMenuBuilder, ComponentType, ChannelType, 
-    PermissionsBitField, ButtonBuilder, ButtonStyle, REST, Routes 
+    Client, 
+    GatewayIntentBits, 
+    Partials, 
+    Collection, 
+    SlashCommandBuilder, 
+    EmbedBuilder, 
+    ActionRowBuilder, 
+    StringSelectMenuBuilder, 
+    ComponentType, 
+    ChannelType, 
+    PermissionsBitField, 
+    ButtonBuilder, 
+    ButtonStyle, 
+    REST, 
+    Routes 
 } = require('discord.js');
 require('dotenv').config();
 const fs = require('fs');
+const express = require('express');
 
 const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
@@ -60,7 +73,7 @@ client.commands.set('panel', {
             ]);
 
         const row = new ActionRowBuilder().addComponents(menu);
-        await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+        interaction.reply({ embeds: [embed], components: [row] });
     }
 });
 
@@ -99,39 +112,51 @@ client.commands.set('embedbuilder', {
             await interaction.followUp({ content: prompt, ephemeral: true });
             const filter = m => m.author.id === interaction.user.id;
             const collected = await interaction.channel.awaitMessages({ filter, max: 1, time: 120000 });
-            return collected.first()?.content || '';
+            return collected.first().content;
         };
 
         const collector = msg.createMessageComponentCollector({ componentType: ComponentType.Button, time: 900000 });
         collector.on('collect', async i => {
             if (i.user.id !== interaction.user.id) return i.reply({ content: 'Only the command user can edit this embed.', ephemeral: true });
 
-            if (i.customId === 'set_title') embed.setTitle(await askInput('Enter the embed title:'));
-            if (i.customId === 'set_desc') embed.setDescription(await askInput('Enter the embed description:'));
-            if (i.customId === 'set_color') embed.setColor(await askInput('Enter a hex color (e.g., #de8ef4):'));
-            if (i.customId === 'add_field') {
-                const input = await askInput('Enter field as: `name | value | inline(true/false)`');
-                const [name, value, inline] = input.split('|').map(x => x.trim());
+            if (i.customId === 'set_title') {
+                const title = await askInput('Enter the embed title:');
+                embed.setTitle(title);
+            } else if (i.customId === 'set_desc') {
+                const desc = await askInput('Enter the embed description:');
+                embed.setDescription(desc);
+            } else if (i.customId === 'set_color') {
+                const color = await askInput('Enter a hex color (e.g., #de8ef4):');
+                embed.setColor(color);
+            } else if (i.customId === 'add_field') {
+                const fieldInput = await askInput('Enter field as: `name | value | inline(true/false)`');
+                const [name, value, inline] = fieldInput.split('|').map(x => x.trim());
                 embed.addFields({ name, value, inline: inline === 'true' });
-            }
-            if (i.customId === 'finish_embed') {
+            } else if (i.customId === 'finish_embed') {
                 collector.stop();
                 await i.update({ content: 'Embed finished!', embeds: [embed], components: [] });
-                return interaction.channel.send({ embeds: [embed] });
+                interaction.channel.send({ embeds: [embed] });
             }
 
-            await i.update({ embeds: [embed], components: [buttonsRow, dropdownRow] });
+            await i.editReply({ embeds: [embed] });
         });
 
         const dropdownCollector = msg.createMessageComponentCollector({ componentType: ComponentType.StringSelect, time: 900000 });
         dropdownCollector.on('collect', async sel => {
             if (sel.user.id !== interaction.user.id) return sel.reply({ content: 'Only the command user can edit this embed.', ephemeral: true });
 
-            if (sel.values[0] === 'set_footer') embed.setFooter({ text: await askInput('Enter the footer text:') });
-            if (sel.values[0] === 'set_thumb') embed.setThumbnail(await askInput('Enter the thumbnail URL:'));
-            if (sel.values[0] === 'set_image') embed.setImage(await askInput('Enter the image URL:'));
+            if (sel.values[0] === 'set_footer') {
+                const footer = await askInput('Enter the footer text:');
+                embed.setFooter({ text: footer });
+            } else if (sel.values[0] === 'set_thumb') {
+                const thumb = await askInput('Enter the thumbnail URL:');
+                embed.setThumbnail(thumb);
+            } else if (sel.values[0] === 'set_image') {
+                const img = await askInput('Enter the image URL:');
+                embed.setImage(img);
+            }
 
-            await sel.update({ embeds: [embed], components: [buttonsRow, dropdownRow] });
+            await sel.update({ embeds: [embed] });
         });
 
         collector.on('end', async () => await msg.edit({ components: [] }).catch(() => {}));
@@ -139,14 +164,13 @@ client.commands.set('embedbuilder', {
     }
 });
 
-// -------------------- Interaction handler for tickets --------------------
+// -------------------- Ticket interactions --------------------
 client.on('interactionCreate', async interaction => {
     if (interaction.isChatInputCommand()) {
         const command = client.commands.get(interaction.commandName);
         if (command) await command.execute(interaction);
     }
 
-    // Ticket dropdown
     if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_menu') {
         const type = interaction.values[0];
         const { category, logChannel, staffRole } = await ensureCategoryAndLog(interaction.guild);
@@ -173,7 +197,6 @@ client.on('interactionCreate', async interaction => {
         interaction.reply({ content: `Ticket created: ${channel}`, ephemeral: true });
     }
 
-    // Close ticket button
     if (interaction.isButton() && interaction.customId === 'close_ticket') {
         const { logChannel } = await ensureCategoryAndLog(interaction.guild);
         await interaction.reply({ content: 'Closing ticket...', ephemeral: true });
@@ -184,7 +207,7 @@ client.on('interactionCreate', async interaction => {
 });
 
 // -------------------- Ready --------------------
-client.once('clientReady', async () => {
+client.once('ready', async () => {
     console.log(`Logged in as ${client.user.tag}`);
 
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
@@ -197,6 +220,12 @@ client.once('clientReady', async () => {
         console.error('❌ Failed to register commands:', err);
     }
 });
+
+// -------------------- Express port for Render --------------------
+const app = express();
+const PORT = process.env.PORT || 5000;
+app.get('/', (req, res) => res.send('Alaska Management Bot is running!'));
+app.listen(PORT, () => console.log(`🌐 Express server running on port ${PORT}`));
 
 // -------------------- Login --------------------
 if (!process.env.TOKEN) {
