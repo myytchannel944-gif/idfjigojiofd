@@ -1,7 +1,7 @@
 {
   "name": "alaska-management-bot",
   "version": "1.1.0",
-  "description": "All-in-one Discord bot with ticket system and interactive embed builder",
+  "description": "Alaska Management Discord Bot",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js"
