@@ -12,6 +12,7 @@ const client = new Client({
     partials: [Partials.Channel, Partials.GuildMember, Partials.Message]
 });
 
+// ─── Constants ──────────────────────────────────────────────────
 const BOT_COLOR = "#2f3136"; 
 const SUPPORT_BANNER = "https://image2url.com/r2/default/images/1771467061096-fc09db59-fd9e-461f-ba30-c8b1ee42ff1f.jpg";
 const CONFIG_PATH = './config.json';
@@ -23,17 +24,18 @@ let config = (() => {
 
 const saveConfig = () => fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
 
-// Store ticket metadata: { channelId: { openerId, startTime, claimedBy } }
+// Metadata storage for logs and durations
 const ticketData = new Map();
 
+// ─── Interaction Handler ─────────────────────────────────────────
 client.on('interactionCreate', async (int) => {
     if (!int.guild || int.user.bot) return;
 
     try {
-        // 1. TICKET CREATION
+        // 1. TICKET CREATION (Selection Menu)
         if (int.isStringSelectMenu() && int.customId === 'ticket_type') {
             await int.deferReply({ ephemeral: true });
-            if (!config.staffRole) return int.editReply("⚠️ Use `/setup` first.");
+            if (!config.staffRole) return int.editReply("⚠️ Bot not configured. Run `/setup`.");
 
             const dept = int.values[0];
             let pingRole = config.staffRole; 
@@ -45,12 +47,12 @@ client.on('interactionCreate', async (int) => {
                 type: ChannelType.GuildText,
                 permissionOverwrites: [
                     { id: int.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-                    { id: int.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+                    { id: int.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.AttachFiles] },
                     { id: pingRole, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
                 ]
             });
 
-            // Store Metadata
+            // Store data for duration tracking and logs
             ticketData.set(channel.id, { openerId: int.user.id, startTime: Date.now(), claimedBy: null });
 
             const row = new ActionRowBuilder().addComponents(
@@ -63,28 +65,27 @@ client.on('interactionCreate', async (int) => {
                 embeds: [new EmbedBuilder()
                     .setTitle(`🏛️ ${dept.replace('-', ' ').toUpperCase()} Session`)
                     .setColor(BOT_COLOR)
-                    .setDescription("Staff will be with you shortly. Use the buttons below to manage this session.")
-                    .setImage(SUPPORT_BANNER)],
+                    .setDescription("Welcome. Please explain your situation in detail. Our team will assist you shortly.")
+                    .setImage(SUPPORT_BANNER)
+                    .setTimestamp()],
                 components: [row]
             });
 
-            return int.editReply(`✅ Session created: ${channel}`);
+            return int.editReply(`✅ Session opened: ${channel}`);
         }
 
-        // 2. CLAIM LOGIC
+        // 2. CLAIM SYSTEM
         if (int.isButton() && int.customId === 'claim_ticket') {
             const data = ticketData.get(int.channel.id);
-            if (data?.claimedBy) return int.reply({ content: `⚠️ Already claimed by <@${data.claimedBy}>`, ephemeral: true });
+            if (data?.claimedBy) return int.reply({ content: "⚠️ This ticket is already claimed.", ephemeral: true });
 
             data.claimedBy = int.user.id;
             ticketData.set(int.channel.id, data);
 
-            const claimEmbed = new EmbedBuilder()
-                .setColor(ButtonStyle.Success)
-                .setDescription(`✅ This ticket is now being handled by ${int.user}.`);
+            await int.reply({ 
+                embeds: [new EmbedBuilder().setColor("#43b581").setDescription(`✅ This session has been claimed by ${int.user}.`)] 
+            });
 
-            await int.reply({ embeds: [claimEmbed] });
-            // Remove the claim button but keep the close button
             const newRow = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('close_ticket').setLabel('Close').setStyle(ButtonStyle.Danger)
             );
@@ -93,15 +94,13 @@ client.on('interactionCreate', async (int) => {
 
         // 3. CLOSE & DETAILED LOGS
         if (int.isButton() && int.customId === 'close_ticket') {
-            const data = ticketData.get(int.channel.id) || { openerId: "Unknown", startTime: Date.now(), claimedBy: "None" };
-            
-            await int.reply("📑 **Processing logs and closing...**");
+            const data = ticketData.get(int.channel.id) || { openerId: "Unknown", startTime: Date.now(), claimedBy: null };
+            await int.reply("📑 **Generating logs and closing channel...**");
 
-            // Calculate Duration
+            // Calculate duration
             const durationMs = Date.now() - data.startTime;
             const mins = Math.floor(durationMs / 60000);
             const secs = ((durationMs % 60000) / 1000).toFixed(0);
-            const durationString = `${mins}m ${secs}s`;
 
             const msgs = await int.channel.messages.fetch({ limit: 100 });
             const transcript = msgs.reverse().map(m => `[${m.createdAt.toLocaleString()}] ${m.author.tag}: ${m.content}`).join('\n');
@@ -109,16 +108,15 @@ client.on('interactionCreate', async (int) => {
 
             if (logCh) {
                 const logEmbed = new EmbedBuilder()
-                    .setTitle("📁 Session Closed")
+                    .setTitle("📁 Ticket Logged")
                     .setColor("#ff4757")
                     .addFields(
-                        { name: "Opened By", value: `<@${data.openerId}>`, inline: true },
+                        { name: "Opener", value: `<@${data.openerId}>`, inline: true },
                         { name: "Claimed By", value: data.claimedBy ? `<@${data.claimedBy}>` : "Unclaimed", inline: true },
                         { name: "Closed By", value: `${int.user}`, inline: true },
-                        { name: "Duration", value: `\`${durationString}\``, inline: true },
+                        { name: "Duration", value: `\`${mins}m ${secs}s\``, inline: true },
                         { name: "Channel", value: `\`${int.channel.name}\``, inline: true }
-                    )
-                    .setTimestamp();
+                    ).setTimestamp();
 
                 const buffer = Buffer.from(transcript, 'utf-8');
                 await logCh.send({ embeds: [logEmbed], files: [{ attachment: buffer, name: `transcript-${int.channel.name}.txt` }] });
@@ -128,31 +126,53 @@ client.on('interactionCreate', async (int) => {
             setTimeout(() => int.channel.delete().catch(() => {}), 5000);
         }
 
-        // 4. SETUP
+        // 4. SETUP (Matches image style)
         if (int.isChatInputCommand() && int.commandName === 'setup') {
             if (!int.member.permissions.has(PermissionsBitField.Flags.Administrator)) return int.reply({ content: "🚫 Admin only.", ephemeral: true });
-            config = { logChannel: int.options.getChannel('logs').id, staffRole: int.options.getRole('staff').id, iaRole: int.options.getRole('ia_role').id, mgmtRole: int.options.getRole('management_role').id };
+
+            config = { 
+                logChannel: int.options.getChannel('logs').id, 
+                staffRole: int.options.getRole('staff').id, 
+                iaRole: int.options.getRole('ia_role').id, 
+                mgmtRole: int.options.getRole('management_role').id 
+            };
             saveConfig();
+
             const menu = new StringSelectMenuBuilder().setCustomId('ticket_type').setPlaceholder('Select Department...')
                 .addOptions([
                     { label: 'General Support', value: 'general', emoji: '❓' },
                     { label: 'Internal Affairs', value: 'internal-affairs', emoji: '👮' },
                     { label: 'Management', value: 'management', emoji: '💎' }
                 ]);
-            await int.channel.send({ 
-                embeds: [new EmbedBuilder().setTitle('🏛️ Alaska Support & Relations').setColor(BOT_COLOR).setDescription('Select a category to begin.').setImage(SUPPORT_BANNER)], 
-                components: [new ActionRowBuilder().addComponents(menu)] 
-            });
-            return int.reply({ content: "✅ Deployed.", ephemeral: true });
+
+            const panelEmbed = new EmbedBuilder()
+                .setTitle('🏛️ Alaska Support & Relations')
+                .setColor(BOT_COLOR)
+                .setDescription(
+                    'Select a category below to initiate a private session.\n\n' +
+                    '🔹 **General Support**\nServer help and partnerships.\n\n' +
+                    '🔹 **Internal Affairs**\nStaff misconduct reports.\n\n' +
+                    '🔹 **Management**\nExecutive appeals and perk claims.'
+                )
+                .setImage(SUPPORT_BANNER);
+
+            await int.channel.send({ embeds: [panelEmbed], components: [new ActionRowBuilder().addComponents(menu)] });
+            return int.reply({ content: "✅ Ticket Panel deployed.", ephemeral: true });
         }
     } catch (e) { console.error(e); }
 });
 
 client.once('ready', async () => {
-    const commands = [new SlashCommandBuilder().setName('setup').setDescription('Deploy ticket panel').addChannelOption(o => o.setName('logs').setDescription('Logs').setRequired(true)).addRoleOption(o => o.setName('staff').setDescription('Staff').setRequired(true)).addRoleOption(o => o.setName('ia_role').setDescription('IA').setRequired(true)).addRoleOption(o => o.setName('management_role').setDescription('Mgmt').setRequired(true))];
+    const commands = [
+        new SlashCommandBuilder().setName('setup').setDescription('Deploy ticket panel')
+            .addChannelOption(o => o.setName('logs').setDescription('Log channel').setRequired(true))
+            .addRoleOption(o => o.setName('staff').setDescription('General Staff').setRequired(true))
+            .addRoleOption(o => o.setName('ia_role').setDescription('Internal Affairs').setRequired(true))
+            .addRoleOption(o => o.setName('management_role').setDescription('Management').setRequired(true))
+    ];
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
     await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
-    console.log(`✅ Alaska Executive Online.`);
+    console.log(`✅ Alaska Online.`);
 });
 
 client.login(process.env.TOKEN);
