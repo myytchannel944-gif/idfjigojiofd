@@ -151,7 +151,7 @@ client.on('interactionCreate', async interaction => {
                     .setCustomId('asrp_dashboard')
                     .setPlaceholder('Select an option...')
                     .addOptions([
-                        { label: 'Staff Applications', value: 'staff_apps', emoji: '📝' },
+                        { label: 'Staff Applications', value: 'staff_apps', emoji: '📋' },
                         { label: 'In-Game Rules',      value: 'ig_rules',   emoji: '🎮' },
                         { label: 'Discord Rules',      value: 'dc_rules',   emoji: '📜' },
                     ]);
@@ -204,21 +204,57 @@ client.on('interactionCreate', async interaction => {
             if (interaction.customId === 'asrp_dashboard') {
                 const pages = {
                     staff_apps: {
-                        title: "📝 Applications + Forms",
-                        content: "• **Staff Application**\nApplications are **OPEN**\n\n🔗 [Apply here](https://your-link.com)",
+                        title: "📋 Staff Applications",
+                        content:
+                            "**Join the Alaska State RolePlay Staff Team**\n\n" +
+                            "We are currently **accepting applications** for motivated and reliable members.\n\n" +
+
+                            "🛡️ **Application Status**\n" +
+                            "• General Staff     → **OPEN**\n" +
+                            "• Internal Affairs  → **CLOSED**\n" +
+                            "• Management        → **CLOSED**\n\n" +
+
+                            "📌 **What we’re looking for**\n" +
+                            "• Maturity & professionalism\n" +
+                            "• Strong understanding of roleplay rules\n" +
+                            "• Active participation in the community\n" +
+                            "• Good communication skills\n" +
+                            "• Ability to stay calm in difficult situations\n\n" +
+
+                            "🔗 **Apply Here**\n" +
+                            "[Staff Application Form](https://melonly.xyz/forms/7429303261795979264)\n\n" +
+
+                            "📩 **Next steps**\n" +
+                            "→ You’ll receive a confirmation DM after submitting\n" +
+                            "→ Decisions & updates posted in #📋┃application-results\n" +
+                            "→ Typical response time: within 24 hours\n\n" +
+
+                            "⚠️ **Please note**\n" +
+                            "Only apply if you are serious and can commit time. Duplicate or low-effort applications will be denied.",
                     },
                     ig_rules: {
                         title: "🎮 In-Game Rules",
                         content:
-                            "• Be respectful — no toxicity\n" +
-                            "• No exploits / cheats / mods\n" +
-                            "• No RDM / VDM\n" +
-                            "• No failed RP / powergaming\n" +
-                            "• Serious RP only",
+                            "┃ **Be Respectful.** No bullying, hate speech, or toxic behavior.\n\n" +
+                            "┃ **Exploits or Hacks.** Using cheats, glitches, or mods is an instant ban.\n\n" +
+                            "┃ **Serious RP Only.** No trolling, clown RP, or unrealistic scenarios.\n\n" +
+                            "┃ **Failed RP** Don’t do things that would be impossible in real life (e.g. superhuman strength)\n\n" +
+                            "┃ **RDM** Killing without valid roleplay reason is not allowed.\n\n" +
+                            "┃ **VDM** Don’t run people over unless part of an approved RP.",
                     },
                     dc_rules: {
                         title: "📜 Discord Rules",
-                        content: "Respect others. No toxicity, spam, advertising, or harassment.",
+                        content:
+                            "┃ **Discord Nicknames must match your Roblox Username.** Your nickname must match your Roblox Username without having any special characters and nothing in front or behind, a callsign is allowed.\n\n" +
+                            "┃ **Respect all members.** Discriminative or racial slurs are prohibited. We don’t ask you to love somebody but be kind particularly.\n\n" +
+                            "┃ **Message content.** Spamming or flooding chat is prohibited. NSFW, pornography, nudity, etc. are prohibited. “Bad words” are allowed.\n\n" +
+                            "┃ **Alternative Accounts are prohibited.** Alternative accounts, a.k.a. “Alt Accounts” are prohibited.\n\n" +
+                            "┃ **Advertising** Don’t advertise your server in DM’s or conversations.\n\n" +
+                            "┃ **Do not send any suspicious links.** Link shorteners, IP grabbers, and other potentially questionable content fall under this category.\n\n" +
+                            "┃ **Use channels for their intended purpose** Make sure your text and audio chats are appropriate for the right channels.\n\n" +
+                            "┃ **English only** You are required to only use English so Moderators can deal with mod scenes accordingly.\n\n" +
+                            "┃ **Contributing** Any contributions including liveries, uniforms, and anything else are property of Alaska State Roleplay.\n\n" +
+                            "┃ **Terms of use** You must abide by the Discord Community Guidelines and the Discord Terms of Service. Not following both will result in strict moderation action.",
                     },
                 };
 
@@ -377,17 +413,12 @@ client.once('ready', async () => {
     try {
         console.log(`Refreshing ${commands.length} commands...`);
 
-        // Guild-specific registration → commands appear quickly in this server
         const TEST_GUILD_ID = '1472277307002589216';
         await rest.put(
             Routes.applicationGuildCommands(client.user.id, TEST_GUILD_ID),
             { body: commands },
         );
         console.log(`Guild commands registered in server ${TEST_GUILD_ID}`);
-
-        // If you later want global commands (slower to appear), uncomment this instead:
-        // await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
-        // console.log('Global commands registered');
 
     } catch (err) {
         console.error('Command registration failed:', err);
