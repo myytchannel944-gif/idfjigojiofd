@@ -1,7 +1,7 @@
+// index.js
 require('dotenv').config();
 const fs = require('fs/promises');
 const path = require('path');
-
 const {
     Client,
     GatewayIntentBits,
@@ -11,13 +11,14 @@ const {
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
+    StringSelectMenuBuilder,
     ChannelType,
     PermissionsBitField,
     REST,
     Routes,
-    StringSelectMenuBuilder
 } = require('discord.js');
 
+/** @type {import('discord.js').Client<true>} */
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -35,6 +36,7 @@ const client = new Client({
 // ─── Configuration ────────────────────────────────────────
 const CONFIG_PATH = path.join(__dirname, 'config.json');
 
+/** @type {import('./types').BotConfig} */
 const DEFAULT_CONFIG = {
     logChannel: null,
     staffRole: null,
@@ -42,14 +44,18 @@ const DEFAULT_CONFIG = {
     mgmtRole: null,
 };
 
-let config = DEFAULT_CONFIG;
+/** @type {import('./types').BotConfig} */
+let config = { ...DEFAULT_CONFIG };
 
 async function loadConfig() {
     try {
         const data = await fs.readFile(CONFIG_PATH, 'utf-8');
         config = { ...DEFAULT_CONFIG, ...JSON.parse(data) };
+        console.log('Config loaded');
     } catch (err) {
-        if (err.code !== 'ENOENT') console.error('Config load error:', err);
+        if (err.code !== 'ENOENT') {
+            console.error('Failed to load config:', err);
+        }
         config = { ...DEFAULT_CONFIG };
     }
 }
@@ -62,29 +68,84 @@ async function saveConfig() {
     }
 }
 
-// ─── Constants ────────────────────────────────────────────
-const BOT_COLOR = 0x2b6cb0;           // nicer hex → decimal
-const SUPPORT_BANNER = "https://image2url.com/r2/default/images/1771467061096-fc09db59-fd9e-461f-ba30-c8b1ee42ff1f.jpg";
-const DASHBOARD_ICON = "https://image2url.com/r2/default/images/1771563774401-5dd69719-a2a9-42d7-a76e-c9028c62fe2f.jpg";
+// ─── Constants & Assets ───────────────────────────────────
+const COLORS = {
+    PRIMARY: 0x2b6cb0,
+    SUCCESS: 0x43b581,
+    DANGER:  0xff4757,
+};
+
+const ASSETS = {
+    SUPPORT_BANNER: "https://image2url.com/r2/default/images/1771467061096-fc09db59-fd9e-461f-ba30-c8b1ee42ff1f.jpg",
+    DASHBOARD_ICON: "https://image2url.com/r2/default/images/1771563774401-5dd69719-a2a9-42d7-a76e-c9028c62fe2f.jpg",
+};
 
 const TICKET_ROLE_ID = "1474234032677060795";
 
-// Store ticket metadata (channelId → data)
-const ticketData = new Map();
+const ticketData = new Map(); // channelId → ticket metadata
 
 // ─── Helpers ──────────────────────────────────────────────
-function getPingRole(department) {
+/**
+ * @param {string} department
+ * @returns {string | null}
+ */
+function getPingRoleId(department) {
     if (department === 'internal-affairs') return config.iaRole;
-    if (department === 'management') return config.mgmtRole;
+    if (department === 'management')     return config.mgmtRole;
     return config.staffRole;
 }
 
+/**
+ * @param {import('discord.js').TextChannel} channel
+ * @param {string} department
+ * @param {import('discord.js').GuildMember} opener
+ */
+async function createTicketChannel(channel, department, opener) {
+    const pingRoleId = getPingRoleId(department);
+    if (!pingRoleId) throw new Error(`No role configured for department: ${department}`);
+
+    const name = `${department}-${opener.user.username}`.toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 100);
+
+    return channel.guild.channels.create({
+        name,
+        type: ChannelType.GuildText,
+        parent: channel.parentId ?? undefined,
+        permissionOverwrites: [
+            { id: channel.guild.id,               deny: [PermissionsBitField.Flags.ViewChannel] },
+            { id: opener.id,                       allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+            { id: pingRoleId,                      allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+        ],
+    });
+}
+
+function createTicketEmbed(department) {
+    return new EmbedBuilder()
+        .setTitle(`🏛️ ${department.toUpperCase()} Support`)
+        .setColor(COLORS.PRIMARY)
+        .setImage(ASSETS.SUPPORT_BANNER);
+}
+
+function createControlButtons(disabled = false) {
+    return new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId('claim_ticket')
+            .setLabel('Claim')
+            .setStyle(ButtonStyle.Success)
+            .setDisabled(disabled),
+        new ButtonBuilder()
+            .setCustomId('close_ticket')
+            .setLabel('Close')
+            .setStyle(ButtonStyle.Danger)
+            .setDisabled(disabled),
+    );
+}
+
 // ─── Interaction Handler ──────────────────────────────────
-client.on('interactionCreate', async (interaction) => {
-    if (!interaction.guild || interaction.user.bot) return;
+client.on('interactionCreate', async interaction => {
+    if (!interaction.isDiscord().guild || interaction.user.bot) return;
 
     try {
-        // ── Slash Commands ───────────────────────────────
+        // ── Slash Commands ────────────────────────────────
         if (interaction.isChatInputCommand()) {
             if (interaction.commandName === 'dashboard') {
                 if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
@@ -92,25 +153,25 @@ client.on('interactionCreate', async (interaction) => {
                 }
 
                 const embed = new EmbedBuilder()
-                    .setAuthor({ name: "ALASKA STATE ROLEPLAY • OFFICIAL DIRECTORY", iconURL: DASHBOARD_ICON })
+                    .setAuthor({ name: "ALASKA STATE ROLEPLAY • OFFICIAL DIRECTORY", iconURL: ASSETS.DASHBOARD_ICON })
                     .setTitle("Dashboard")
                     .setDescription(
                         "**Welcome to Alaska State RolePlay!**\n\n" +
-                        "Welcome to the best ER:LC roleplay community. Here you will find all of the information needed to get started.\n\n" +
-                        "Before participating, make sure you've read and understand our rules and application process.\n" +
+                        "The best ER:LC roleplay community.\n\n" +
+                        "Make sure you've read the rules and understand the application process.\n" +
                         "Use the menu below to navigate."
                     )
-                    .setColor(BOT_COLOR)
-                    .setImage(DASHBOARD_ICON)
+                    .setColor(COLORS.PRIMARY)
+                    .setImage(ASSETS.DASHBOARD_ICON)
                     .setTimestamp();
 
                 const menu = new StringSelectMenuBuilder()
                     .setCustomId('asrp_dashboard')
                     .setPlaceholder('Select an option...')
                     .addOptions([
-                        { label: 'Staff Applications', value: 'staff_apps', description: 'Apply to join the ASRP staff team', emoji: '📝' },
-                        { label: 'In-Game Rules',       value: 'ig_rules',  description: 'View the ER:LC server rules',        emoji: '🎮' },
-                        { label: 'Discord Rules',       value: 'dc_rules',  description: 'View community guidelines',           emoji: '📜' },
+                        { label: 'Staff Applications', value: 'staff_apps', emoji: '📝' },
+                        { label: 'In-Game Rules',      value: 'ig_rules',   emoji: '🎮' },
+                        { label: 'Discord Rules',      value: 'dc_rules',   emoji: '📜' },
                     ]);
 
                 await interaction.channel.send({
@@ -118,7 +179,7 @@ client.on('interactionCreate', async (interaction) => {
                     components: [new ActionRowBuilder().addComponents(menu)],
                 });
 
-                return interaction.reply({ content: "✅ Dashboard deployed.", ephemeral: true });
+                return interaction.reply({ content: "✅ Dashboard panel deployed.", ephemeral: true });
             }
 
             if (interaction.commandName === 'setup') {
@@ -137,15 +198,15 @@ client.on('interactionCreate', async (interaction) => {
                     .setCustomId('ticket_type')
                     .setPlaceholder('Select Department...')
                     .addOptions([
-                        { label: 'General Support',   value: 'general',           emoji: '❓'  },
-                        { label: 'Internal Affairs',  value: 'internal-affairs',  emoji: '👮'  },
-                        { label: 'Management',        value: 'management',        emoji: '💎'  },
+                        { label: 'General Support',   value: 'general',         emoji: '❓' },
+                        { label: 'Internal Affairs',  value: 'internal-affairs', emoji: '👮' },
+                        { label: 'Management',        value: 'management',      emoji: '💎' },
                     ]);
 
                 const embed = new EmbedBuilder()
                     .setTitle('🏛️ Alaska Support')
-                    .setColor(BOT_COLOR)
-                    .setImage(SUPPORT_BANNER);
+                    .setColor(COLORS.PRIMARY)
+                    .setImage(ASSETS.SUPPORT_BANNER);
 
                 await interaction.channel.send({
                     embeds: [embed],
@@ -156,148 +217,121 @@ client.on('interactionCreate', async (interaction) => {
             }
         }
 
-        // ── Select Menus ─────────────────────────────────
+        // ── Select Menus ──────────────────────────────────
         if (interaction.isStringSelectMenu()) {
-            // Dashboard navigation (ephemeral rules/info)
             if (interaction.customId === 'asrp_dashboard') {
-                const responses = {
+                const pages = {
                     staff_apps: {
                         title: "📝 Applications + Forms",
-                        desc: "• **Application Information**\n┃ Our applications can be found by clicking the link below.\n• 📡 **Application Status**\n┃ 🔨 Staff Team > ` OPENED `\n\n🔗 **[ASRP Staff Application](https://your-link.com)**",
+                        content:
+                            "• **Staff Application**\n" +
+                            "Applications are currently **OPEN**\n\n" +
+                            "🔗 [Apply here](https://your-link.com)\n\n" +
+                            "Check your status in <#staff-announcements>",
                     },
                     ig_rules: {
                         title: "🎮 In-Game Rules",
-                        desc:
-                            "**In-Game Rules**\n\n" +
-                            "┃ **Be Respectful**\nNo bullying, hate speech, or toxic behavior.\n\n" +
-                            "┃ **Exploits or Hacks**\nUsing cheats, glitches, or mods is an instant ban.\n\n" +
-                            "┃ **Serious RP Only**\nNo trolling, clown RP, or unrealistic scenarios.\n\n" +
-                            "┃ **Failed RP**\nDon’t do things that would be impossible in real life.\n\n" +
-                            "┃ **RDM**\nKilling without valid roleplay reason is not allowed.\n\n" +
-                            "┃ **VDM**\nDon’t run people over unless part of an approved RP.",
+                        content:
+                            "**Serious Roleplay Only**\n\n" +
+                            "• Be respectful — no hate speech / toxicity\n" +
+                            "• No exploits, cheats, mods\n" +
+                            "• No RDM / VDM\n" +
+                            "• No failed RP or powergaming\n" +
+                            "• No trolling or unrealistic scenarios",
                     },
                     dc_rules: {
                         title: "📜 Discord Rules",
-                        desc:
-                            "### 📜 Conduct\n" +
-                            "┃ **Respect**\nZero tolerance for toxicity.\n" +
-                            "┃ **Advertising**\nNo DM advertising or external links.\n" +
-                            "┃ **Pinging**\nDo not ping Staff without a valid reason.",
+                        content: "Same core rules as in-game:\nRespect, no toxicity, no spam, no advertising.",
                     },
                 };
 
                 const selected = interaction.values[0];
-                const res = responses[selected];
+                const page = pages[selected];
 
-                if (!res) return interaction.reply({ content: "Invalid selection.", ephemeral: true });
+                if (!page) {
+                    return interaction.reply({ content: "Invalid option.", ephemeral: true });
+                }
 
                 const embed = new EmbedBuilder()
-                    .setTitle(res.title)
-                    .setDescription(res.desc)
-                    .setColor(BOT_COLOR)
-                    .setThumbnail(DASHBOARD_ICON);
+                    .setTitle(page.title)
+                    .setDescription(page.content)
+                    .setColor(COLORS.PRIMARY)
+                    .setThumbnail(ASSETS.DASHBOARD_ICON);
 
                 return interaction.reply({ embeds: [embed], ephemeral: true });
             }
 
-            // Ticket creation
             if (interaction.customId === 'ticket_type') {
                 await interaction.deferReply({ ephemeral: true });
 
                 if (!config.staffRole) {
-                    return interaction.editReply("⚠️ Bot not configured yet. Run `/setup` first.");
+                    return interaction.editReply("⚠️ Bot not fully configured. Run `/setup` first.");
                 }
 
                 const department = interaction.values[0];
-                const pingRoleId = getPingRole(department);
+                const opener = interaction.member;
 
-                if (!pingRoleId) {
-                    return interaction.editReply("⚠️ Missing role configuration for this department.");
-                }
+                const ticketChannel = await createTicketChannel(interaction.channel, department, opener);
 
-                // Give user temporary ticket role (if needed for permissions elsewhere)
-                await interaction.member.roles.add(TICKET_ROLE_ID).catch(() => {});
-
-                const channel = await interaction.guild.channels.create({
-                    name: `${department}-${interaction.user.username}`.slice(0, 100),
-                    type: ChannelType.GuildText,
-                    permissionOverwrites: [
-                        { id: interaction.guild.id,          deny: [PermissionsBitField.Flags.ViewChannel] },
-                        { id: interaction.user.id,            allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-                        { id: pingRoleId,                     allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-                    ],
-                });
-
-                ticketData.set(channel.id, {
-                    openerId: interaction.user.id,
+                ticketData.set(ticketChannel.id, {
+                    openerId: opener.id,
                     startTime: Date.now(),
                     claimedBy: null,
                     department,
                 });
 
-                const buttons = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId('claim_ticket').setLabel('Claim').setStyle(ButtonStyle.Success),
-                    new ButtonBuilder().setCustomId('close_ticket').setLabel('Close').setStyle(ButtonStyle.Danger),
-                );
+                await opener.roles.add(TICKET_ROLE_ID).catch(() => {});
 
-                await channel.send({
-                    content: `${interaction.user} | <@&${pingRoleId}>`,
-                    embeds: [
-                        new EmbedBuilder()
-                            .setTitle(`🏛️ ${department.toUpperCase()} Session`)
-                            .setColor(BOT_COLOR)
-                            .setImage(SUPPORT_BANNER),
-                    ],
-                    components: [buttons],
+                await ticketChannel.send({
+                    content: `${opener} | <@&${getPingRoleId(department)}>`,
+                    embeds: [createTicketEmbed(department)],
+                    components: [createControlButtons()],
                 });
 
-                return interaction.editReply(`✅ Ticket created: ${channel}`);
+                return interaction.editReply(`✅ Ticket created → ${ticketChannel}`);
             }
         }
 
-        // ── Buttons ──────────────────────────────────────
+        // ── Buttons ───────────────────────────────────────
         if (interaction.isButton()) {
             const data = ticketData.get(interaction.channel.id);
             if (!data) return;
 
             if (interaction.customId === 'claim_ticket') {
                 if (data.claimedBy) {
-                    return interaction.reply({ content: "This ticket is already claimed.", ephemeral: true });
+                    return interaction.reply({ content: "Ticket already claimed.", ephemeral: true });
                 }
 
                 data.claimedBy = interaction.user.id;
 
                 await interaction.reply({
-                    embeds: [new EmbedBuilder().setColor(0x43b581).setDescription(`✅ Claimed by ${interaction.user}`)],
+                    embeds: [new EmbedBuilder()
+                        .setColor(COLORS.SUCCESS)
+                        .setDescription(`✅ Ticket claimed by ${interaction.user}`)],
                 });
 
-                // Remove claim button, keep close
-                const row = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId('close_ticket').setLabel('Close').setStyle(ButtonStyle.Danger)
-                );
-
-                await interaction.message.edit({ components: [row] });
+                await interaction.message.edit({ components: [createControlButtons(true)] });
             }
 
             if (interaction.customId === 'close_ticket') {
-                await interaction.reply("📑 **Closing ticket...**");
+                await interaction.reply("📑 Closing ticket in a few seconds...");
 
-                // Remove ticket role from opener
                 const member = await interaction.guild.members.fetch(data.openerId).catch(() => null);
                 if (member) await member.roles.remove(TICKET_ROLE_ID).catch(() => {});
 
-                // Send log
+                // Log ticket
                 if (config.logChannel) {
                     const logChannel = interaction.guild.channels.cache.get(config.logChannel);
-                    if (logChannel) {
-                        const durationMin = Math.floor((Date.now() - data.startTime) / 60000);
+                    if (logChannel?.isTextBased()) {
+                        const duration = Math.floor((Date.now() - data.startTime) / 60000);
                         const logEmbed = new EmbedBuilder()
                             .setTitle("📁 Ticket Closed")
-                            .setColor(0xff4757)
+                            .setColor(COLORS.DANGER)
                             .addFields(
                                 { name: "Opener",     value: `<@${data.openerId}>`, inline: true },
-                                { name: "Closed By",  value: `${interaction.user}`,  inline: true },
-                                { name: "Duration",   value: `${durationMin} min`,  inline: true },
+                                { name: "Closed by",  value: `${interaction.user}`, inline: true },
+                                { name: "Duration",   value: `${duration} min`,     inline: true },
+                                { name: "Department", value: data.department,       inline: true },
                             )
                             .setTimestamp();
 
@@ -306,13 +340,13 @@ client.on('interactionCreate', async (interaction) => {
                 }
 
                 ticketData.delete(interaction.channel.id);
-                setTimeout(() => interaction.channel.delete().catch(() => {}), 4000);
+                setTimeout(() => interaction.channel.delete().catch(() => {}), 3500);
             }
         }
     } catch (err) {
-        console.error('Interaction error:', err);
+        console.error('Interaction handler error:', err);
         if (!interaction.deferred && !interaction.replied) {
-            await interaction.reply({ content: "Something went wrong...", ephemeral: true }).catch(() => {});
+            await interaction.reply({ content: "Something went wrong internally.", ephemeral: true }).catch(() => {});
         }
     }
 });
@@ -321,16 +355,14 @@ client.on('interactionCreate', async (interaction) => {
 client.once('ready', async () => {
     await loadConfig();
 
-    const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-
     const commands = [
         new SlashCommandBuilder()
             .setName('dashboard')
-            .setDescription('Deploy the main dashboard panel'),
+            .setDescription('Deploy the main information dashboard'),
 
         new SlashCommandBuilder()
             .setName('setup')
-            .setDescription('Setup ticket system (admin only)')
+            .setDescription('Configure ticket system & deploy panel')
             .addChannelOption(opt =>
                 opt.setName('logs')
                     .setDescription('Ticket log channel')
@@ -338,7 +370,7 @@ client.once('ready', async () => {
             )
             .addRoleOption(opt =>
                 opt.setName('staff')
-                    .setDescription('General staff role')
+                    .setDescription('General staff/support role')
                     .setRequired(true)
             )
             .addRoleOption(opt =>
@@ -353,15 +385,14 @@ client.once('ready', async () => {
             ),
     ];
 
+    const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+
     try {
         await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
-        console.log(`✅ ${client.user.tag} is online | ${commands.length} commands registered`);
+        console.log(`✅ ${client.user.tag} ready • ${commands.length} commands registered`);
     } catch (err) {
         console.error('Failed to register commands:', err);
     }
 });
 
-client.login(process.env.TOKEN).catch(err => {
-    console.error('Login failed:', err);
-    process.exit(1);
-});
+client.login(process.env.TOKEN);
