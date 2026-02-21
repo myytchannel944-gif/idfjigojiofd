@@ -1,4 +1,11 @@
-Partials,
+require('dotenv').config();
+const fs = require('fs/promises');
+const path = require('path');
+const express = require('express');
+const {
+    Client,
+    GatewayIntentBits,
+    Partials,
     SlashCommandBuilder,
     EmbedBuilder,
     ActionRowBuilder,
@@ -58,10 +65,23 @@ const TICKET_ROLE_ID = "1474234032677060795";
 const TICKET_COOLDOWN_MS = 2 * 60 * 1000;
 const ERLC_GAME_LINK = 'https://www.roblox.com/games/2534724415/Emergency-Response-Liberty-County';
 const ASRP_APPLICATION_LINK = 'https://melonly.xyz/forms/7429303261795979264';
-const OWNER_PANEL_CODE = '6118';
+const OWNER_PANEL_CODE = process.env.OWNER_PANEL_CODE || '6118';
+const TOKEN = process.env.TOKEN;
+const PORT = Number(process.env.PORT) || 3000;
 
 const ticketData = new Map();
 const userLastTicketOpen = new Map();
+
+const app = express();
+app.get('/', (_, res) => res.status(200).send('ASRP bot is running'));
+app.get('/health', (_, res) => {
+    res.status(200).json({
+        status: 'ok',
+        uptime: process.uptime(),
+        ready: client.isReady(),
+    });
+});
+
 
 function getPingRole(department) {
     if (department === 'internal-affairs') return config.iaRole;
@@ -227,7 +247,7 @@ async function logTicketClose(interaction, data, transcriptInfo) {
         .setTitle(`Ticket Closed: ${interaction.channel.name}`)
         .setColor(0xff5555)
         .addFields(
-@@ -129,274 +245,441 @@ client.on('interactionCreate', async (interaction) => {
+@@ -129,274 +259,456 @@ client.on('interactionCreate', async (interaction) => {
         if (interaction.isChatInputCommand() && interaction.commandName === 'dashboard') {
             if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
                 return interaction.reply({ content: "🚫 Admin only.", ephemeral: true });
@@ -645,6 +665,7 @@ client.once('ready', async () => {
     await pruneMissingTicketChannels();
 
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+    const rest = new REST({ version: '10' }).setToken(TOKEN);
 
     const commands = [
         new SlashCommandBuilder().setName('dashboard').setDescription('Deploy dashboard panel'),
@@ -671,8 +692,25 @@ client.once('ready', async () => {
     ];
 
     await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
+    const targetGuildId = process.env.GUILD_ID;
+    if (targetGuildId) {
+        await rest.put(Routes.applicationGuildCommands(client.user.id, targetGuildId), { body: commands });
+        console.log(`✅ Registered guild commands for ${targetGuildId}`);
+    } else {
+        await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
+        console.log('✅ Registered global commands');
+    }
 
     console.log(`✅ ${client.user.tag} online • Commands registered`);
 });
 
 client.login(process.env.TOKEN);
+if (!TOKEN) {
+    throw new Error('Missing TOKEN environment variable.');
+}
+
+app.listen(PORT, () => {
+    console.log(`🌐 Health server listening on port ${PORT}`);
+});
+
+client.login(TOKEN);
