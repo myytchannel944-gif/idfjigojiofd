@@ -62,6 +62,15 @@ async function saveConfig() {
 // ─── Constants & Owner Protection ─────────────────────────
 const BOT_OWNER_ID = '1205738144323080214';
 
+// Roles that should NEVER see ticket channels
+const BLOCKED_ROLE_IDS = [
+    '1472280032574570616',
+    '1472280229794943282'
+];
+
+// Role that can see ALL tickets (override)
+const ALL_TICKETS_ROLE_ID = '1472278188469125355';
+
 const BOT_COLOR = 0x2b6cb0;
 const SUPPORT_BANNER = "https://image2url.com/r2/default/images/1771467061096-fc09db59-fd9e-461f-ba30-c8b1ee42ff1f.jpg";
 const DASHBOARD_ICON = "https://image2url.com/r2/default/images/1771563774401-5dd69719-a2a9-42d7-a76e-c9028c62fe2f.jpg";
@@ -390,7 +399,7 @@ client.on('interactionCreate', async (interaction) => {
                 return interaction.reply({ content: "🚫 Owner-only command.", flags: MessageFlags.Ephemeral });
             }
 
-            await interaction.deferReply({ ephemeral: true });
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
             const jsonInput = interaction.options.getString('json', true);
             const targetChannel = interaction.options.getChannel('channel') || interaction.channel;
@@ -432,62 +441,6 @@ client.on('interactionCreate', async (interaction) => {
                     flags: MessageFlags.Ephemeral
                 });
             }
-        }
-
-        // 6. SETUP COMMAND + panel
-        if (interaction.isChatInputCommand() && interaction.commandName === 'setup') {
-            if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-                return interaction.reply({ content: "🚫 Admin only.", flags: MessageFlags.Ephemeral });
-            }
-
-            config.logChannel = interaction.options.getChannel('logs')?.id ?? config.logChannel;
-            config.staffRole   = interaction.options.getRole('staff')?.id ?? config.staffRole;
-            config.iaRole      = interaction.options.getRole('ia_role')?.id ?? config.iaRole;
-            config.mgmtRole    = interaction.options.getRole('management_role')?.id ?? config.mgmtRole;
-
-            await saveConfig();
-
-            const setupEmbed = new EmbedBuilder()
-                .setColor(BOT_COLOR)
-                .setTitle('Setup Updated')
-                .addFields(
-                    { name: 'Logs Channel', value: formatSetupValue(config.logChannel, 'channel'), inline: true },
-                    { name: 'Staff Role',   value: formatSetupValue(config.staffRole, 'role'), inline: true },
-                    { name: 'IA Role',      value: formatSetupValue(config.iaRole, 'role'), inline: true },
-                    { name: 'Management Role', value: formatSetupValue(config.mgmtRole, 'role'), inline: true },
-                )
-                .setFooter({ text: `Ticket cooldown: ${Math.round(TICKET_COOLDOWN_MS / 1000)}s` });
-
-            const panelEmbed = new EmbedBuilder()
-                .setTitle("Assistance")
-                .setDescription(
-                    "Welcome to the **Assistance Dashboard**!\n" +
-                    "Here you can easily open a ticket for various types of support.\n\n" +
-                    "**Trolling or abuse of the ticket system may result in punishment.**\n\n" +
-                    "👤 **General Support**\n• General Inquiries • Reports • Concerns\n\n" +
-                    "🤝 **Partnership Support**\n• Partnership & affiliation requests\n\n" +
-                    "🛡️ **Internal Affairs Support**\n• Staff reports • Appeals • Role requests\n\n" +
-                    "🛠️ **Management Support**\n• Giveaways • High-rank inquiries • Purchases"
-                )
-                .setColor(BOT_COLOR)
-                .setImage(SUPPORT_BANNER);
-
-            const menu = new StringSelectMenuBuilder()
-                .setCustomId('ticket_type')
-                .setPlaceholder('Request Assistance...')
-                .addOptions([
-                    { label: 'General Support', value: 'general', emoji: '👤' },
-                    { label: 'Partnership Support', value: 'partnership', emoji: '🤝' },
-                    { label: 'Internal Affairs', value: 'internal-affairs', emoji: '🛡️' },
-                    { label: 'Management Support', value: 'management', emoji: '🛠️' },
-                ]);
-
-            await interaction.channel.send({
-                embeds: [panelEmbed],
-                components: [new ActionRowBuilder().addComponents(menu)],
-            });
-
-            return interaction.reply({ content: "✅ Assistance panel deployed.", embeds: [setupEmbed], flags: MessageFlags.Ephemeral });
         }
 
         // 7. DASHBOARD MENU RESPONSES
@@ -547,7 +500,7 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
         }
 
-        // 8. TICKET CREATION
+        // 8. TICKET CREATION (with blocked roles)
         if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_type') {
             await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -574,14 +527,28 @@ client.on('interactionCreate', async (interaction) => {
 
             let channel;
             try {
+                // Build permission overwrites
+                const overwrites = [
+                    // Everyone: hidden
+                    { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+                    // Ticket opener: visible + send messages
+                    { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+                    // Support role: visible + send messages
+                    { id: pingRoleId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+                ];
+
+                // Explicitly DENY access to blocked roles
+                BLOCKED_ROLE_IDS.forEach(roleId => {
+                    overwrites.push({
+                        id: roleId,
+                        deny: [PermissionsBitField.Flags.ViewChannel]
+                    });
+                });
+
                 channel = await interaction.guild.channels.create({
                     name: `ticket-${dept}-${safeUsername}`,
                     type: ChannelType.GuildText,
-                    permissionOverwrites: [
-                        { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-                        { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-                        { id: pingRoleId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-                    ],
+                    permissionOverwrites: overwrites,
                 });
             } catch (err) {
                 console.error('Channel creation failed:', err);
