@@ -270,37 +270,48 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: "✅ Dashboard deployed.", ephemeral: true });
         }
 
-        // 2. TICKET STATS
+        // 2. TICKET STATS — FIXED VERSION
         if (interaction.isChatInputCommand() && interaction.commandName === 'ticketstats') {
             if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
                 return interaction.reply({ content: "🚫 Admin only.", ephemeral: true });
             }
 
-            const openTickets = Array.from(ticketData.values());
-            const byDepartment = openTickets.reduce((acc, t) => {
-                acc[t.department || 'unknown'] = (acc[t.department || 'unknown'] || 0) + 1;
-                return acc;
-            }, {});
+            try {
+                const openTickets = Array.from(ticketData.values());
 
-            const deptLines = Object.entries(byDepartment)
-                .map(([d, c]) => `• ${d}: **${c}**`)
-                .join('\n') || '• none';
+                const byDepartment = openTickets.reduce((acc, ticket) => {
+                    const dept = ticket.department || 'unknown';
+                    acc[dept] = (acc[dept] || 0) + 1;
+                    return acc;
+                }, {});
 
-            const claimedCount = openTickets.filter(t => t.claimedBy).length;
+                const deptLines = Object.entries(byDepartment)
+                    .map(([dept, count]) => `• ${dept}: **${count}**`)
+                    .join('\n') || '• none';
 
-            const embed = new EmbedBuilder()
-                .setColor(BOT_COLOR)
-                .setTitle('📊 Live Ticket Stats')
-                .setDescription('Current ticket queue and response status.')
-                .addFields(
-                    { name: 'Open Tickets', value: openTickets.length, inline: true },
-                    { name: 'Claimed', value: claimedCount, inline: true },
-                    { name: 'Unclaimed', value: openTickets.length - claimedCount, inline: true },
-                    { name: 'By Department', value: deptLines }
-                )
-                .setTimestamp();
+                const claimedCount = openTickets.filter(t => t.claimedBy).length;
+                const unclaimedCount = openTickets.length - claimedCount;
 
-            return interaction.reply({ embeds: [embed], ephemeral: true });
+                const embed = new EmbedBuilder()
+                    .setColor(BOT_COLOR)
+                    .setTitle('📊 Live Ticket Stats')
+                    .setDescription('Current ticket queue and response status.')
+                    .addFields(
+                        { name: 'Open Tickets', value: `${openTickets.length}`, inline: true },
+                        { name: 'Claimed',      value: `${claimedCount}`,      inline: true },
+                        { name: 'Unclaimed',    value: `${unclaimedCount}`,    inline: true },
+                        { name: 'By Department', value: deptLines, inline: false }
+                    )
+                    .setTimestamp();
+
+                return interaction.reply({ embeds: [embed], ephemeral: true });
+            } catch (statsErr) {
+                console.error('Ticketstats command failed:', statsErr);
+                return interaction.reply({ 
+                    content: "❌ Failed to load ticket stats. Check bot logs for details.", 
+                    ephemeral: true 
+                });
+            }
         }
 
         // 3. OWNER PANEL (text or embed editing)
@@ -721,40 +732,14 @@ client.once('ready', async () => {
         if (!guildId) {
             console.log("⚠️ GUILD_ID not set in .env — skipping command registration");
         } else {
-            console.log(`Starting cleanup & re-sync for guild ${guildId}...`);
-
-            // Step 1: Fetch all current guild commands
-            const existingCommands = await rest.get(
-                Routes.applicationGuildCommands(client.user.id, guildId)
-            );
-            console.log(`Found ${existingCommands.length} existing guild commands.`);
-
-            // Step 2: Delete each one individually
-            for (const cmd of existingCommands) {
-                try {
-                    await rest.delete(
-                        Routes.applicationGuildCommand(client.user.id, guildId, cmd.id)
-                    );
-                    console.log(`Deleted old command: ${cmd.name} (${cmd.id})`);
-                } catch (delErr) {
-                    console.error(`Failed to delete ${cmd.name}:`, delErr);
-                }
-            }
-
-            // Step 3: Register fresh commands
             await rest.put(
                 Routes.applicationGuildCommands(client.user.id, guildId),
                 { body: commands }
             );
-            console.log(`✅ Successfully re-registered ${commands.length} clean commands in guild ${guildId}.`);
-
-            // Optional: Wait and verify
-            await new Promise(r => setTimeout(r, 2000));
-            const afterSync = await rest.get(Routes.applicationGuildCommands(client.user.id, guildId));
-            console.log(`Verification after sync: ${afterSync.length} commands present.`);
+            console.log(`✅ Registered ${commands.length} guild-specific commands in ${guildId}`);
         }
     } catch (err) {
-        console.error('Cleanup / registration failed:', err);
+        console.error('Command registration failed:', err);
     }
 
     console.log(`✅ ${client.user.tag} online`);
