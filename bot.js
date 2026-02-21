@@ -61,7 +61,7 @@ const SUPPORT_BANNER = "https://image2url.com/r2/default/images/1771467061096-fc
 const DASHBOARD_ICON = "https://image2url.com/r2/default/images/1771563774401-5dd69719-a2a9-42d7-a76e-c9028c62fe2f.jpg";
 const TICKET_ROLE_ID = "1474234032677060795";
 
-const ticketData = new Map(); // channelId → { openerId, startTime, claimedBy? }
+const ticketData = new Map();
 
 function getPingRole(department) {
     if (department === 'internal-affairs') return config.iaRole;
@@ -78,12 +78,8 @@ async function saveTranscript(channel) {
             const author = m.author.tag;
             let content = m.content || '';
 
-            if (m.embeds.length > 0) {
-                content += ' [Embed]';
-            }
-            if (m.attachments.size > 0) {
-                content += ' [Attachment(s)]';
-            }
+            if (m.embeds.length > 0) content += ' [Embed]';
+            if (m.attachments.size > 0) content += ' [Attachment(s)]';
 
             return `[${time}] ${author}: ${content}`;
         });
@@ -186,10 +182,10 @@ client.on('interactionCreate', async (interaction) => {
                     "Welcome to the **Assistance Dashboard**!\n" +
                     "Here you can easily open a ticket for various types of support.\n\n" +
                     "**Trolling or abuse of the ticket system may result in punishment.**\n\n" +
-                    "👤 **General Support** • 👤 General Inquiries • Reports • Concerns\n\n" +
-                    "🤝 **Partnership Support** • 🤝 Partnership & affiliation requests\n\n" +
-                    "🛡️ **Internal Affairs** • 🛡️ Staff reports • Appeals • Role requests\n\n" +
-                    "🛠️ **Management Support** • 🛠️ Giveaways • High-rank • Purchases"
+                    "👤 **General Support**\n• General Inquiries • Reports • Concerns\n\n" +
+                    "🤝 **Partnership Support**\n• Partnership & affiliation requests\n\n" +
+                    "🛡️ **Internal Affairs Support**\n• Staff reports • Appeals • Role requests\n\n" +
+                    "🛠️ **Management Support**\n• Giveaways • High-rank inquiries • Purchases"
                 )
                 .setColor(BOT_COLOR)
                 .setImage(SUPPORT_BANNER);
@@ -215,9 +211,46 @@ client.on('interactionCreate', async (interaction) => {
         // 3. DASHBOARD MENU RESPONSES
         if (interaction.isStringSelectMenu() && interaction.customId === 'asrp_dashboard') {
             const responses = {
-                staff_apps: { title: "📝 Applications + Forms", desc: "• Application Information\n┃ #「🌸」·applications\n• Status\n┃ Staff → OPEN\n┃ Media → OPEN\n\n🔗 [Staff Application](https://your-link.com)" },
-                ig_rules: { title: "🎮 In-Game Rules", desc: "**Rules**\nBe Respectful • No Exploits • Serious RP • No RDM/VDM" },
-                dc_rules: { title: "📜 Discord Rules", desc: "**Rules**\nRespect • No Advertising • No unnecessary pings • No NSFW • Keep drama private" }
+                staff_apps: {
+                    title: "📝 Staff Applications",
+                    desc: "**Staff & Media Team Applications**\n\n" +
+                          "**🟢 Status: OPENED 🟢**\n\n" +
+                          "We are currently accepting applications for:\n" +
+                          "• Staff Team (Moderators, Helpers, Administrators)\n" +
+                          "• Media Team (Content Creators, Editors, Graphic Designers)\n\n" +
+                          "All applications are reviewed by management. Make sure you meet the requirements listed in #「🌸」·applications before applying.\n\n" +
+                          "🔗 **Apply here:** https://melonly.xyz/forms/7429303261795979264\n\n" +
+                          "We look forward to potentially welcoming you to the team!"
+                },
+                ig_rules: {
+                    title: "🎮 In-Game Rules (ER:LC RP Standards)",
+                    desc: "**Alaska State RolePlay • In-Game Rules**\n\n" +
+                          "These rules are in place to maintain serious, high-quality roleplay in Emergency Response: Liberty County.\n\n" +
+                          "1. **Serious Roleplay Only**\n   • No trolling, meme RP, fail RP, or unrealistic behavior.\n   • All actions must be believable in a real-world emergency/civilian context.\n\n" +
+                          "2. **Fear & New Life Rule (NLR)**\n   • Value your life realistically — do not act fearless when weapons are drawn.\n   • After death, you forget previous events for **15 minutes** and cannot return to the scene or seek revenge.\n\n" +
+                          "3. **No RDM / VDM**\n   • Random Deathmatch (killing without valid RP reason) = severe punishment.\n   • Vehicle Deathmatch (running people over without RP) = same.\n\n" +
+                          "4. **No Powergaming / Metagaming**\n   • No forcing actions on others without consent.\n   • No using out-of-character (OOC) information in-character.\n\n" +
+                          "5. **No Exploits, Hacks, or Glitches**\n   • Any form of cheating, bug abuse, or unfair advantage = permanent ban.\n\n" +
+                          "6. **Realistic Interactions & Pursuits**\n   • Proper use of radios, handcuffs, sirens, etc.\n   • No cop baiting, excessive reckless driving without RP reason.\n   • Criminals must commit crimes with buildup — no random mass chaos.\n\n" +
+                          "7. **Department & Job Guidelines**\n   • Follow chain of command and department protocols.\n   • EMS must prioritize life-saving over arrests.\n   • Police must have probable cause before searches/arrests.\n\n" +
+                          "Violations → Warning → Kick → Temporary Ban → Permanent Ban (depending on severity).\nStaff decisions are final."
+                },
+                dc_rules: {
+                    title: "📜 Discord Server Rules",
+                    desc: "**Alaska State RolePlay • Discord Rules**\n\n" +
+                          "Breaking any rule may result in warnings, mutes, kicks, or bans depending on severity.\n\n" +
+                          "1. **Respect & No Toxicity**\n   • No harassment, slurs, hate speech, bullying, or targeted attacks.\n   • Zero tolerance for discrimination (race, gender, sexuality, religion, etc.).\n\n" +
+                          "2. **No NSFW / Explicit Content**\n   • No pornography, gore, suggestive images/text, or links.\n   • Keep the server family-friendly (Roblox community).\n\n" +
+                          "3. **No Spam / Flooding**\n   • No excessive emojis, copypasta, caps spam, mention spam, or zalgo.\n   • Use channels for their intended purpose.\n\n" +
+                          "4. **No Advertising / Self-Promotion**\n   • No unsolicited server invites, YouTube/TikTok/Instagram promo, or DM advertising.\n   • Partnerships only through official management.\n\n" +
+                          "5. **No Unnecessary Pings / Staff Abuse**\n   • Do not ping @Staff, @here, @everyone without valid emergency.\n   • False ticket opens or pings = punishment.\n\n" +
+                          "6. **No Drama / Public Callouts**\n   • Keep personal conflicts private — no public stirring or callouts.\n   • Report issues to staff privately via tickets.\n\n" +
+                          "7. **No Impersonation**\n   • Do not pretend to be staff, fake ranks, or use misleading nicknames.\n\n" +
+                          "8. **Follow Roblox & Discord ToS**\n   • No ban evasion, doxxing, threats, illegal content, or sharing personal information.\n\n" +
+                          "9. **English in Public Channels**\n   • Main language is English — other languages allowed in appropriate or private channels.\n\n" +
+                          "10. **Staff Instructions**\n   • Follow directions from staff members.\n   • Arguing with staff punishments may lead to further action.\n\n" +
+                          "Use #appeals or open a ticket if you believe a punishment was unfair."
+                }
             };
 
             const res = responses[interaction.values[0]];
@@ -227,7 +260,8 @@ client.on('interactionCreate', async (interaction) => {
                 .setTitle(res.title)
                 .setDescription(res.desc)
                 .setColor(BOT_COLOR)
-                .setThumbnail(DASHBOARD_ICON);
+                .setThumbnail(DASHBOARD_ICON)
+                .setFooter({ text: "Alaska State RolePlay • Follow the rules!" });
 
             return interaction.reply({ embeds: [embed], ephemeral: true });
         }
@@ -237,13 +271,15 @@ client.on('interactionCreate', async (interaction) => {
             await interaction.deferReply({ ephemeral: true });
 
             if (!config.staffRole || !config.iaRole || !config.mgmtRole) {
-                return interaction.editReply("⚠️ Run `/setup` first to configure roles.");
+                return interaction.editReply("⚠️ Please run `/setup` first to configure roles.");
             }
 
             const dept = interaction.values[0];
             const pingRoleId = getPingRole(dept);
 
-            if (!pingRoleId) return interaction.editReply("⚠️ Department role not set.");
+            if (!pingRoleId) {
+                return interaction.editReply("⚠️ Role not configured for this department.");
+            }
 
             await interaction.member.roles.add(TICKET_ROLE_ID).catch(() => {});
 
@@ -251,9 +287,9 @@ client.on('interactionCreate', async (interaction) => {
                 name: `ticket-${dept}-${interaction.user.username.toLowerCase()}`,
                 type: ChannelType.GuildText,
                 permissionOverwrites: [
-                    { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-                    { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-                    { id: pingRoleId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+                    { id: interaction.guild.id,               deny:  [PermissionsBitField.Flags.ViewChannel] },
+                    { id: interaction.user.id,                 allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+                    { id: pingRoleId,                          allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
                 ],
             });
 
@@ -275,45 +311,56 @@ client.on('interactionCreate', async (interaction) => {
                         .setTitle(`🏛️ ${dept.toUpperCase().replace('-', ' ')} Ticket`)
                         .setColor(BOT_COLOR)
                         .setImage(SUPPORT_BANNER)
-                        .setDescription("Please describe your issue. A staff member will assist you soon.")
+                        .setDescription("Please explain your request. Staff will be with you shortly.")
                 ],
                 components: [buttons],
             });
 
-            return interaction.editReply(`✅ Ticket created → ${channel}`);
+            return interaction.editReply(`✅ Ticket created: ${channel}`);
         }
 
         // 5. TICKET BUTTONS
         if (interaction.isButton()) {
             const data = ticketData.get(interaction.channel.id);
-            if (!data) return interaction.reply({ content: "Ticket no longer exists.", ephemeral: true });
+            if (!data) {
+                return interaction.reply({ content: "This ticket no longer exists.", ephemeral: true });
+            }
 
-            // CLAIM
             if (interaction.customId === 'claim_ticket') {
                 await interaction.deferUpdate();
 
                 if (data.claimedBy) {
-                    return interaction.followUp({ content: `Already claimed by <@${data.claimedBy}>.`, ephemeral: true });
+                    return interaction.followUp({
+                        content: `This ticket is already claimed by <@${data.claimedBy}>.`,
+                        ephemeral: true
+                    });
                 }
 
-                ticketData.set(interaction.channel.id, { ...data, claimedBy: interaction.user.id });
-
-                await interaction.message.edit({
-                    components: [new ActionRowBuilder().addComponents(
-                        new ButtonBuilder().setCustomId('close_ticket').setLabel('Close').setStyle(ButtonStyle.Danger)
-                    )]
+                ticketData.set(interaction.channel.id, {
+                    ...data,
+                    claimedBy: interaction.user.id
                 });
 
+                const newRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('close_ticket')
+                        .setLabel('Close')
+                        .setStyle(ButtonStyle.Danger)
+                );
+
+                await interaction.message.edit({ components: [newRow] });
+
                 await interaction.channel.send({
-                    embeds: [new EmbedBuilder()
-                        .setColor(0x43b581)
-                        .setDescription(`✅ Claimed by ${interaction.user}`)]
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0x43b581)
+                            .setDescription(`✅ Ticket claimed by ${interaction.user}`)
+                    ]
                 });
 
                 return;
             }
 
-            // CLOSE
             if (interaction.customId === 'close_ticket') {
                 await interaction.deferReply({ ephemeral: true });
 
@@ -321,12 +368,13 @@ client.on('interactionCreate', async (interaction) => {
                 const isUnclaimed = !data.claimedBy;
 
                 if (!isUnclaimed && !isClaimer) {
-                    return interaction.editReply({ content: "🚫 Only the claiming staff member can close this ticket." });
+                    return interaction.editReply({
+                        content: "🚫 Only the staff member who claimed this ticket can close it."
+                    });
                 }
 
                 const transcriptInfo = await saveTranscript(interaction.channel);
 
-                // Log to configured channel + attach transcript
                 await logTicketClose(interaction, data, transcriptInfo);
 
                 const member = await interaction.guild.members.fetch(data.openerId).catch(() => null);
@@ -334,8 +382,8 @@ client.on('interactionCreate', async (interaction) => {
 
                 await interaction.editReply({
                     content: transcriptInfo
-                        ? `📑 Closing... (transcript saved & logged)`
-                        : `📑 Closing... (transcript failed)`
+                        ? `📑 Closing ticket... (transcript: ${transcriptInfo.filename})`
+                        : "📑 Closing ticket... (transcript save failed)"
                 });
 
                 setTimeout(() => interaction.channel.delete().catch(console.error), 6000);
@@ -344,7 +392,7 @@ client.on('interactionCreate', async (interaction) => {
     } catch (err) {
         console.error('Interaction error:', err);
         if (!interaction.deferred && !interaction.replied) {
-            interaction.reply({ content: "Error occurred.", ephemeral: true }).catch(() => {});
+            await interaction.reply({ content: "An error occurred.", ephemeral: true }).catch(() => {});
         }
     }
 });
@@ -355,19 +403,26 @@ client.once('ready', async () => {
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
     const commands = [
-        new SlashCommandBuilder().setName('dashboard').setDescription('Deploy dashboard panel'),
+        new SlashCommandBuilder()
+            .setName('dashboard')
+            .setDescription('Deploy the main dashboard panel'),
+
         new SlashCommandBuilder()
             .setName('setup')
-            .setDescription('Configure ticket system')
-            .addChannelOption(o => o.setName('logs').setDescription('Log channel').setRequired(false))
-            .addRoleOption(o => o.setName('staff').setDescription('Staff role').setRequired(false))
-            .addRoleOption(o => o.setName('ia_role').setDescription('IA role').setRequired(false))
-            .addRoleOption(o => o.setName('management_role').setDescription('Management role').setRequired(false)),
+            .setDescription('Configure ticket system (admin only)')
+            .addChannelOption(opt =>
+                opt.setName('logs').setDescription('Log channel (optional)').setRequired(false))
+            .addRoleOption(opt =>
+                opt.setName('staff').setDescription('General staff role').setRequired(false))
+            .addRoleOption(opt =>
+                opt.setName('ia_role').setDescription('Internal Affairs role').setRequired(false))
+            .addRoleOption(opt =>
+                opt.setName('management_role').setDescription('Management role').setRequired(false)),
     ];
 
     await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
 
-    console.log(`✅ ${client.user.tag} online • Commands registered`);
+    console.log(`✅ ${client.user.tag} is online and commands registered`);
 });
 
 client.login(process.env.TOKEN);
