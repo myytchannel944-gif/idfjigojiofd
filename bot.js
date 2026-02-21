@@ -62,26 +62,23 @@ async function saveConfig() {
     }
 }
 
-// ─── Constants & Owner Protection ─────────────────────────
+// ─── Constants ────────────────────────────────────────────
 const BOT_OWNER_ID = '1205738144323080214';
 
-// Roles that should NEVER see ticket channels
+// Foundership role: ONLY this role can use slash commands
+const FOUNDERSHIP_ROLE_ID = '1472278188469125355';
+
+// Blocked roles (cannot see tickets)
 const BLOCKED_ROLE_IDS = [
     '1472280032574570616',
     '1472280229794943282'
 ];
-
-// Foundership role: sees all tickets, can close any ticket, add/remove anyone from any ticket
-const ALL_TICKETS_ROLE_ID = '1472278188469125355';
 
 const BOT_COLOR = 0x2b6cb0;
 const SUPPORT_BANNER = "https://image2url.com/r2/default/images/1771467061096-fc09db59-fd9e-461f-ba30-c8b1ee42ff1f.jpg";
 const DASHBOARD_ICON = "https://image2url.com/r2/default/images/1771563774401-5dd69719-a2a9-42d7-a76e-c9028c62fe2f.jpg";
 const TICKET_ROLE_ID = "1474234032677060795";
 const TICKET_COOLDOWN_MS = 2 * 60 * 1000;
-const ERLC_GAME_LINK = 'https://www.roblox.com/games/2534724415/Emergency-Response-Liberty-County';
-const ASRP_APPLICATION_LINK = 'https://melonly.xyz/forms/7429303261795979264';
-const OWNER_PANEL_CODE = process.env.OWNER_PANEL_CODE || '6118';
 const TOKEN = process.env.TOKEN;
 const PORT = Number(process.env.PORT) || 3000;
 
@@ -101,6 +98,10 @@ app.get('/health', (_, res) => {
 // ─── Helpers ──────────────────────────────────────────────
 function isBotOwner(interaction) {
     return interaction.user.id === BOT_OWNER_ID;
+}
+
+function isFoundership(member) {
+    return member.roles.cache.has(FOUNDERSHIP_ROLE_ID);
 }
 
 function getPingRole(department) {
@@ -169,8 +170,7 @@ async function saveTicketState() {
 async function pruneMissingTicketChannels() {
     let mutated = false;
     for (const channelId of ticketData.keys()) {
-        let exists = client.guilds.cache.some(g => g.channels.cache.has(channelId));
-        if (!exists) {
+        if (!client.guilds.cache.some(g => g.channels.cache.has(channelId))) {
             ticketData.delete(channelId);
             mutated = true;
         }
@@ -232,7 +232,7 @@ async function logTicketClose(interaction, data, transcriptInfo, closeReason = '
             { name: 'Opener', value: opener ? `${opener.user.tag} (${opener.id})` : data.openerId, inline: true },
             { name: 'Claimed by', value: claimedBy, inline: true },
             { name: 'Closed by', value: `${closer.tag} (${closer.id})`, inline: true },
-            { name: 'Reason', value: closeReason || 'No reason provided', inline: false },
+            { name: 'Reason', value: closeReason, inline: false },
             { name: 'Department', value: data.department || '—', inline: true },
             { name: 'Created', value: `<t:${Math.floor(data.startTime / 1000)}:f>`, inline: true },
         )
@@ -247,13 +247,19 @@ async function logTicketClose(interaction, data, transcriptInfo, closeReason = '
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand() && !interaction.isStringSelectMenu() && !interaction.isButton() && !interaction.isModalSubmit()) return;
 
+    // Global restriction: ONLY Foundership role can use slash commands
+    if (interaction.isChatInputCommand()) {
+        if (!interaction.member.roles.cache.has(FOUNDERSHIP_ROLE_ID)) {
+            return interaction.reply({
+                content: "🚫 This bot is restricted to Foundership members only.",
+                flags: MessageFlags.Ephemeral
+            });
+        }
+    }
+
     try {
         // 1. DASHBOARD COMMAND
         if (interaction.isChatInputCommand() && interaction.commandName === 'dashboard') {
-            if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-                return interaction.reply({ content: "🚫 Admin only.", flags: MessageFlags.Ephemeral });
-            }
-
             const embed = new EmbedBuilder()
                 .setAuthor({ name: "ALASKA STATE ROLEPLAY • OFFICIAL DIRECTORY", iconURL: DASHBOARD_ICON })
                 .setTitle("Dashboard")
@@ -278,20 +284,13 @@ client.on('interactionCreate', async (interaction) => {
 
             const menuRow = new ActionRowBuilder().addComponents(menu);
 
-            await interaction.channel.send({
-                embeds: [embed],
-                components: [menuRow],
-            });
+            await interaction.channel.send({ embeds: [embed], components: [menuRow] });
 
             return interaction.reply({ content: "✅ Dashboard deployed.", flags: MessageFlags.Ephemeral });
         }
 
         // 2. TICKET STATS
         if (interaction.isChatInputCommand() && interaction.commandName === 'ticketstats') {
-            if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-                return interaction.reply({ content: "🚫 Admin only.", flags: MessageFlags.Ephemeral });
-            }
-
             try {
                 const openTickets = Array.from(ticketData.values());
 
@@ -332,10 +331,6 @@ client.on('interactionCreate', async (interaction) => {
 
         // 3. OWNER PANEL
         if (interaction.isChatInputCommand() && interaction.commandName === 'ownerpanel') {
-            if (!isBotOwner(interaction)) {
-                return interaction.reply({ content: "🚫 Owner-only command.", flags: MessageFlags.Ephemeral });
-            }
-
             const code = interaction.options.getString('code', true);
             if (code !== OWNER_PANEL_CODE) {
                 return interaction.reply({ content: "🚫 Invalid owner code.", flags: MessageFlags.Ephemeral });
@@ -384,10 +379,6 @@ client.on('interactionCreate', async (interaction) => {
 
         // 4. SAY COMMAND
         if (interaction.isChatInputCommand() && interaction.commandName === 'say') {
-            if (!isBotOwner(interaction)) {
-                return interaction.reply({ content: "🚫 Owner-only command.", flags: MessageFlags.Ephemeral });
-            }
-
             const message = interaction.options.getString('message', true);
             const targetChannel = interaction.options.getChannel('channel') || interaction.channel;
 
@@ -401,10 +392,6 @@ client.on('interactionCreate', async (interaction) => {
 
         // 5. EMBED BUILDER
         if (interaction.isChatInputCommand() && interaction.commandName === 'embedbuilder') {
-            if (!isBotOwner(interaction)) {
-                return interaction.reply({ content: "🚫 Owner-only command.", flags: MessageFlags.Ephemeral });
-            }
-
             await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
             const jsonInput = interaction.options.getString('json', true);
@@ -451,10 +438,6 @@ client.on('interactionCreate', async (interaction) => {
 
         // 6. SETUP COMMAND
         if (interaction.isChatInputCommand() && interaction.commandName === 'setup') {
-            if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-                return interaction.reply({ content: "🚫 Admin only.", flags: MessageFlags.Ephemeral });
-            }
-
             const logs = interaction.options.getChannel('logs');
             const staff = interaction.options.getRole('staff');
             const ia = interaction.options.getRole('ia_role');
@@ -569,7 +552,7 @@ client.on('interactionCreate', async (interaction) => {
                     { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
                     { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] },
                     { id: pingRoleId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] },
-                    { id: ALL_TICKETS_ROLE_ID, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] }
+                    { id: FOUNDERSHIP_ROLE_ID, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] }
                 ];
 
                 BLOCKED_ROLE_IDS.forEach(roleId => {
@@ -625,7 +608,7 @@ client.on('interactionCreate', async (interaction) => {
             const member = interaction.member;
 
             const canManage = isSupportStaff(member) ||
-                              member.roles.cache.has(ALL_TICKETS_ROLE_ID) ||
+                              member.roles.cache.has(FOUNDERSHIP_ROLE_ID) ||
                               (data.claimedBy && data.claimedBy === interaction.user.id);
 
             if (!canManage) {
@@ -646,7 +629,7 @@ client.on('interactionCreate', async (interaction) => {
                     { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
                     { id: data.openerId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.ReadMessageHistory] },
                     { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] },
-                    { id: ALL_TICKETS_ROLE_ID, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.ReadMessageHistory, PermissionsBitField.Flags.SendMessages] }
+                    { id: FOUNDERSHIP_ROLE_ID, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] }
                 ];
 
                 BLOCKED_ROLE_IDS.forEach(roleId => {
@@ -671,7 +654,7 @@ client.on('interactionCreate', async (interaction) => {
 
             if (interaction.customId === 'close_ticket') {
                 const canClose = (data.claimedBy && data.claimedBy === interaction.user.id) ||
-                                 member.roles.cache.has(ALL_TICKETS_ROLE_ID);
+                                 member.roles.cache.has(FOUNDERSHIP_ROLE_ID);
 
                 if (!canClose) {
                     return interaction.followUp({ content: "🚫 Only the claimer or Foundership can close this ticket.", flags: MessageFlags.Ephemeral });
@@ -705,7 +688,7 @@ client.on('interactionCreate', async (interaction) => {
 
             const member = interaction.member;
             const canClose = (data.claimedBy && data.claimedBy === interaction.user.id) ||
-                             member.roles.cache.has(ALL_TICKETS_ROLE_ID);
+                             member.roles.cache.has(FOUNDERSHIP_ROLE_ID);
 
             if (!canClose) {
                 return interaction.editReply({ content: "🚫 Permission lost. You can no longer close this ticket.", flags: MessageFlags.Ephemeral });
@@ -733,7 +716,7 @@ client.on('interactionCreate', async (interaction) => {
             setTimeout(() => channel.delete().catch(console.error), 6000);
         }
 
-        // /ticketpersonadd (claimer or Foundership only)
+        // /ticketpersonadd (only claimer or Foundership)
         if (interaction.isChatInputCommand() && interaction.commandName === 'ticketpersonadd') {
             const channel = interaction.channel;
             const data = ticketData.get(channel.id);
@@ -742,7 +725,7 @@ client.on('interactionCreate', async (interaction) => {
 
             const member = interaction.member;
             const isClaimer = data.claimedBy && data.claimedBy === interaction.user.id;
-            const isFoundership = member.roles.cache.has(ALL_TICKETS_ROLE_ID);
+            const isFoundership = member.roles.cache.has(FOUNDERSHIP_ROLE_ID);
 
             if (!isClaimer && !isFoundership) {
                 return interaction.reply({ content: "Only the claimer or Foundership can add users to this ticket.", flags: MessageFlags.Ephemeral });
@@ -763,7 +746,7 @@ client.on('interactionCreate', async (interaction) => {
             }
         }
 
-        // /ticketpersonremove (claimer or Foundership only)
+        // /ticketpersonremove (only claimer or Foundership)
         if (interaction.isChatInputCommand() && interaction.commandName === 'ticketpersonremove') {
             const channel = interaction.channel;
             const data = ticketData.get(channel.id);
@@ -772,7 +755,7 @@ client.on('interactionCreate', async (interaction) => {
 
             const member = interaction.member;
             const isClaimer = data.claimedBy && data.claimedBy === interaction.user.id;
-            const isFoundership = member.roles.cache.has(ALL_TICKETS_ROLE_ID);
+            const isFoundership = member.roles.cache.has(FOUNDERSHIP_ROLE_ID);
 
             if (!isClaimer && !isFoundership) {
                 return interaction.reply({ content: "Only the claimer or Foundership can remove users from this ticket.", flags: MessageFlags.Ephemeral });
@@ -787,6 +770,63 @@ client.on('interactionCreate', async (interaction) => {
                 console.error('Failed to remove user:', err);
                 return interaction.reply({ content: "Failed to remove user. Check bot permissions.", flags: MessageFlags.Ephemeral });
             }
+        }
+
+        // Dashboard menu responses (no restriction since it's not a command)
+        if (interaction.isStringSelectMenu() && interaction.customId === 'asrp_dashboard') {
+            const responses = {
+                staff_apps: {
+                    title: "📝 Staff Applications",
+                    desc: "**Staff Team Applications**\n\n" +
+                          "**🟢 Status: OPENED 🟢**\n\n" +
+                          "We are currently accepting applications for:\n" +
+                          "• Staff Team (Moderators, Helpers, Administrators)\n\n" +
+                          "All applications are reviewed by management. Make sure you meet the requirements listed in #「🌸」·applications before applying.\n\n" +
+                          "🔗 **Apply here:** " + ASRP_APPLICATION_LINK + "\n\n" +
+                          "We look forward to potentially welcoming you to the team!"
+                },
+                ig_rules: {
+                    title: "🎮 In-Game Rules (ER:LC RP Standards)",
+                    desc: "**Alaska State RolePlay • In-Game Rules**\n\n" +
+                          "These rules are in place to maintain serious, high-quality roleplay in Emergency Response: Liberty County.\n\n" +
+                          "1. **Serious Roleplay Only**\n • No trolling, meme RP, fail RP, or unrealistic behavior.\n • All actions must be believable in a real-world emergency/civilian context.\n\n" +
+                          "2. **Fear & New Life Rule (NLR)**\n • Value your life realistically — do not act fearless when weapons are drawn.\n • After death, you forget previous events for **15 minutes** and cannot return to the scene or seek revenge.\n\n" +
+                          "3. **No RDM / VDM**\n • Random Deathmatch (killing without valid RP reason) = severe punishment.\n • Vehicle Deathmatch (running people over without RP) = same.\n\n" +
+                          "4. **No Powergaming / Metagaming**\n • No forcing actions on others without consent.\n • No using out-of-character (OOC) information in-character.\n\n" +
+                          "5. **No Exploits, Hacks, or Glitches**\n • Any form of cheating, bug abuse, or unfair advantage = permanent ban.\n\n" +
+                          "6. **Realistic Interactions & Pursuits**\n • Proper use of radios, handcuffs, sirens, etc.\n • No cop baiting, excessive reckless driving without RP reason.\n • Criminals must commit crimes with buildup — no random mass chaos.\n\n" +
+                          "7. **Department & Job Guidelines**\n • Follow chain of command and department protocols.\n • EMS must prioritize life-saving over arrests.\n • Police must have probable cause before searches/arrests.\n\n" +
+                          "Violations → Warning → Kick → Temporary Ban → Permanent Ban (depending on severity).\nStaff decisions are final."
+                },
+                dc_rules: {
+                    title: "📜 Discord Server Rules",
+                    desc: "**Alaska State RolePlay • Discord Rules**\n\n" +
+                          "Breaking any rule may result in warnings, mutes, kicks, or bans depending on severity.\n\n" +
+                          "1. **Respect & No Toxicity**\n • No harassment, slurs, hate speech, bullying, or targeted attacks.\n • Zero tolerance for discrimination (race, gender, sexuality, religion, etc.).\n\n" +
+                          "2. **No NSFW / Explicit Content**\n • No pornography, gore, suggestive images/text, or links.\n • Keep the server family-friendly (Roblox community).\n\n" +
+                          "3. **No Spam / Flooding**\n • No excessive emojis, copypasta, caps spam, mention spam, or zalgo.\n • Use channels for their intended purpose.\n\n" +
+                          "4. **No Advertising / Self-Promotion**\n • No unsolicited server invites, YouTube/TikTok/Instagram promo, or DM advertising.\n • Partnerships only through official management.\n\n" +
+                          "5. **No Unnecessary Pings / Staff Abuse**\n • Do not ping @Staff, @here, @everyone without valid emergency.\n • False ticket opens or pings = punishment.\n\n" +
+                          "6. **No Drama / Public Callouts**\n • Keep personal conflicts private — no public stirring or callouts.\n • Report issues to staff privately via tickets.\n\n" +
+                          "7. **No Impersonation**\n • Do not pretend to be staff, fake ranks, or use misleading nicknames.\n\n" +
+                          "8. **Follow Roblox & Discord ToS**\n • No ban evasion, doxxing, threats, illegal content, or sharing personal information.\n\n" +
+                          "9. **English in Public Channels**\n • Main language is English — other languages allowed in appropriate or private channels.\n\n" +
+                          "10. **Staff Instructions**\n • Follow directions from staff members.\n • Arguing with staff punishments may lead to further action.\n\n" +
+                          "Use #appeals or open a ticket if you believe a punishment was unfair."
+                }
+            };
+
+            const res = responses[interaction.values[0]];
+            if (!res) return interaction.reply({ content: "Invalid option.", flags: MessageFlags.Ephemeral });
+
+            const embed = new EmbedBuilder()
+                .setTitle(res.title)
+                .setDescription(res.desc)
+                .setColor(BOT_COLOR)
+                .setThumbnail(DASHBOARD_ICON)
+                .setFooter({ text: "Alaska State RolePlay • Follow the rules!" });
+
+            return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
         }
     } catch (err) {
         console.error('Interaction error:', err);
