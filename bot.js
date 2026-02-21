@@ -721,25 +721,40 @@ client.once('ready', async () => {
         if (!guildId) {
             console.log("⚠️ GUILD_ID not set in .env — skipping command registration");
         } else {
-            // TEMP: Clear all existing guild commands first to remove duplicates/ghosts (remove this block after first successful run)
-            console.log("TEMP: Clearing all existing guild commands to fix duplicates...");
-            await rest.put(
-                Routes.applicationGuildCommands(client.user.id, guildId),
-                { body: [] }  // empty = delete all
-            );
-            console.log("TEMP: Guild commands cleared.");
+            console.log(`Starting cleanup & re-sync for guild ${guildId}...`);
 
-            // Now register the clean/current set
+            // Step 1: Fetch all current guild commands
+            const existingCommands = await rest.get(
+                Routes.applicationGuildCommands(client.user.id, guildId)
+            );
+            console.log(`Found ${existingCommands.length} existing guild commands.`);
+
+            // Step 2: Delete each one individually
+            for (const cmd of existingCommands) {
+                try {
+                    await rest.delete(
+                        Routes.applicationGuildCommand(client.user.id, guildId, cmd.id)
+                    );
+                    console.log(`Deleted old command: ${cmd.name} (${cmd.id})`);
+                } catch (delErr) {
+                    console.error(`Failed to delete ${cmd.name}:`, delErr);
+                }
+            }
+
+            // Step 3: Register fresh commands
             await rest.put(
                 Routes.applicationGuildCommands(client.user.id, guildId),
                 { body: commands }
             );
-            console.log(`✅ Registered ${commands.length} guild-specific commands in ${guildId} (duplicates should be gone)`);
+            console.log(`✅ Successfully re-registered ${commands.length} clean commands in guild ${guildId}.`);
 
-            // END OF TEMP BLOCK — comment out or delete the clearing part above after it works once
+            // Optional: Wait and verify
+            await new Promise(r => setTimeout(r, 2000));
+            const afterSync = await rest.get(Routes.applicationGuildCommands(client.user.id, guildId));
+            console.log(`Verification after sync: ${afterSync.length} commands present.`);
         }
     } catch (err) {
-        console.error('Command registration / cleanup failed:', err);
+        console.error('Cleanup / registration failed:', err);
     }
 
     console.log(`✅ ${client.user.tag} online`);
