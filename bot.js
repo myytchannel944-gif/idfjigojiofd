@@ -60,6 +60,8 @@ const BOT_COLOR = 0x2b6cb0;
 const SUPPORT_BANNER = "https://image2url.com/r2/default/images/1771467061096-fc09db59-fd9e-461f-ba30-c8b1ee42ff1f.jpg";
 const DASHBOARD_ICON = "https://image2url.com/r2/default/images/1771563774401-5dd69719-a2a9-42d7-a76e-c9028c62fe2f.jpg";
 const TICKET_ROLE_ID = "1474234032677060795";
+const RESULTS_CHANNEL_ID = "1473104073287930027";
+const ACCEPTED_ROLE_ID = "1472281473003294780";
 
 const ticketData = new Map();
 
@@ -77,10 +79,8 @@ async function saveTranscript(channel) {
             const time = m.createdAt.toISOString().slice(0, 19).replace('T', ' ');
             const author = m.author.tag;
             let content = m.content || '';
-
             if (m.embeds.length > 0) content += ' [Embed]';
             if (m.attachments.size > 0) content += ' [Attachment(s)]';
-
             return `[${time}] ${author}: ${content}`;
         });
 
@@ -277,9 +277,7 @@ client.on('interactionCreate', async (interaction) => {
             const dept = interaction.values[0];
             const pingRoleId = getPingRole(dept);
 
-            if (!pingRoleId) {
-                return interaction.editReply("⚠️ Role not configured for this department.");
-            }
+            if (!pingRoleId) return interaction.editReply("⚠️ Department role not set.");
 
             await interaction.member.roles.add(TICKET_ROLE_ID).catch(() => {});
 
@@ -287,9 +285,9 @@ client.on('interactionCreate', async (interaction) => {
                 name: `ticket-${dept}-${interaction.user.username.toLowerCase()}`,
                 type: ChannelType.GuildText,
                 permissionOverwrites: [
-                    { id: interaction.guild.id,               deny:  [PermissionsBitField.Flags.ViewChannel] },
-                    { id: interaction.user.id,                 allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-                    { id: pingRoleId,                          allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+                    { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+                    { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+                    { id: pingRoleId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
                 ],
             });
 
@@ -311,51 +309,38 @@ client.on('interactionCreate', async (interaction) => {
                         .setTitle(`🏛️ ${dept.toUpperCase().replace('-', ' ')} Ticket`)
                         .setColor(BOT_COLOR)
                         .setImage(SUPPORT_BANNER)
-                        .setDescription("Please explain your request. Staff will be with you shortly.")
+                        .setDescription("Please describe your issue. A staff member will assist you soon.")
                 ],
                 components: [buttons],
             });
 
-            return interaction.editReply(`✅ Ticket created: ${channel}`);
+            return interaction.editReply(`✅ Ticket created → ${channel}`);
         }
 
         // 5. TICKET BUTTONS
         if (interaction.isButton()) {
             const data = ticketData.get(interaction.channel.id);
-            if (!data) {
-                return interaction.reply({ content: "This ticket no longer exists.", ephemeral: true });
-            }
+            if (!data) return interaction.reply({ content: "Ticket no longer exists.", ephemeral: true });
 
             if (interaction.customId === 'claim_ticket') {
                 await interaction.deferUpdate();
 
                 if (data.claimedBy) {
-                    return interaction.followUp({
-                        content: `This ticket is already claimed by <@${data.claimedBy}>.`,
-                        ephemeral: true
-                    });
+                    return interaction.followUp({ content: `Already claimed by <@${data.claimedBy}>.`, ephemeral: true });
                 }
 
-                ticketData.set(interaction.channel.id, {
-                    ...data,
-                    claimedBy: interaction.user.id
+                ticketData.set(interaction.channel.id, { ...data, claimedBy: interaction.user.id });
+
+                await interaction.message.edit({
+                    components: [new ActionRowBuilder().addComponents(
+                        new ButtonBuilder().setCustomId('close_ticket').setLabel('Close').setStyle(ButtonStyle.Danger)
+                    )]
                 });
 
-                const newRow = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder()
-                        .setCustomId('close_ticket')
-                        .setLabel('Close')
-                        .setStyle(ButtonStyle.Danger)
-                );
-
-                await interaction.message.edit({ components: [newRow] });
-
                 await interaction.channel.send({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor(0x43b581)
-                            .setDescription(`✅ Ticket claimed by ${interaction.user}`)
-                    ]
+                    embeds: [new EmbedBuilder()
+                        .setColor(0x43b581)
+                        .setDescription(`✅ Claimed by ${interaction.user}`)]
                 });
 
                 return;
@@ -368,9 +353,7 @@ client.on('interactionCreate', async (interaction) => {
                 const isUnclaimed = !data.claimedBy;
 
                 if (!isUnclaimed && !isClaimer) {
-                    return interaction.editReply({
-                        content: "🚫 Only the staff member who claimed this ticket can close it."
-                    });
+                    return interaction.editReply({ content: "🚫 Only the claiming staff member can close this ticket." });
                 }
 
                 const transcriptInfo = await saveTranscript(interaction.channel);
@@ -382,17 +365,73 @@ client.on('interactionCreate', async (interaction) => {
 
                 await interaction.editReply({
                     content: transcriptInfo
-                        ? `📑 Closing ticket... (transcript: ${transcriptInfo.filename})`
-                        : "📑 Closing ticket... (transcript save failed)"
+                        ? `📑 Closing... (transcript saved & logged)`
+                        : `📑 Closing... (transcript failed)`
                 });
 
                 setTimeout(() => interaction.channel.delete().catch(console.error), 6000);
             }
         }
+
+        // 6. APPLICATION RESULT COMMAND
+        if (interaction.isChatInputCommand() && interaction.commandName === 'application-result') {
+            if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
+                return interaction.reply({ content: "🚫 You need Manage Messages permission to use this command.", ephemeral: true });
+            }
+
+            const status = interaction.options.getString('status');
+            const targetUser = interaction.options.getUser('user');
+            const reason = interaction.options.getString('reason') || 'No reason provided';
+
+            let title, color, description;
+
+            if (status === 'accepted') {
+                title = 'Accepted Application!';
+                color = 0x00ff88;
+                description = `Congratulations ${targetUser}!\n\n` +
+                              `Your application to **Alaska State Roleplay** has been **accepted**!\n\n` +
+                              `We're excited to have you join the team.\n` +
+                              `Check the training chat for next steps.\n\n` +
+                              `Thank you for applying — welcome aboard! 🚔`;
+
+                // Give the accepted role
+                try {
+                    const member = await interaction.guild.members.fetch(targetUser.id);
+                    await member.roles.add(ACCEPTED_ROLE_ID);
+                    console.log(`Added role ${ACCEPTED_ROLE_ID} to ${targetUser.tag} (accepted application)`);
+                } catch (err) {
+                    console.error(`Failed to add accepted role to ${targetUser.tag}:`, err);
+                }
+            } else {
+                title = 'Failed Application!';
+                color = 0xff5555;
+                description = `On behalf of Alaska State Roleplay, we are sad to have had to decline your application.\n\n` +
+                              `We appreciate all that you have put forward into applying for this position, but unfortunately it did not meet our set standards.\n\n` +
+                              `We apologize for this, and we wish you luck if you do want to try again in the future!\n\n` +
+                              `Thank you again ${targetUser} for applying and showing interest in joining our team.`;
+            }
+
+            const embed = new EmbedBuilder()
+                .setTitle(title)
+                .setDescription(description)
+                .setColor(color)
+                .setTimestamp()
+                .setFooter({ text: "Alaska State Roleplay Applications" });
+
+            const resultsChannel = interaction.guild.channels.cache.get(RESULTS_CHANNEL_ID);
+
+            if (!resultsChannel) {
+                return interaction.reply({ content: `Results channel (${RESULTS_CHANNEL_ID}) not found or inaccessible.`, ephemeral: true });
+            }
+
+            await resultsChannel.send({ content: `${targetUser}`, embeds: [embed] });
+
+            return interaction.reply({ content: `✅ **${status.toUpperCase()}** result posted to <#${RESULTS_CHANNEL_ID}>`, ephemeral: true });
+        }
     } catch (err) {
         console.error('Interaction error:', err);
         if (!interaction.deferred && !interaction.replied) {
-            await interaction.reply({ content: "An error occurred.", ephemeral: true }).catch(() => {});
+            interaction.reply({ content: "An error occurred.", ephemeral: true }).catch(() => {});
         }
     }
 });
@@ -403,26 +442,38 @@ client.once('ready', async () => {
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
     const commands = [
-        new SlashCommandBuilder()
-            .setName('dashboard')
-            .setDescription('Deploy the main dashboard panel'),
-
+        new SlashCommandBuilder().setName('dashboard').setDescription('Deploy dashboard panel'),
         new SlashCommandBuilder()
             .setName('setup')
-            .setDescription('Configure ticket system (admin only)')
-            .addChannelOption(opt =>
-                opt.setName('logs').setDescription('Log channel (optional)').setRequired(false))
-            .addRoleOption(opt =>
-                opt.setName('staff').setDescription('General staff role').setRequired(false))
-            .addRoleOption(opt =>
-                opt.setName('ia_role').setDescription('Internal Affairs role').setRequired(false))
-            .addRoleOption(opt =>
-                opt.setName('management_role').setDescription('Management role').setRequired(false)),
+            .setDescription('Configure ticket system')
+            .addChannelOption(o => o.setName('logs').setDescription('Log channel').setRequired(false))
+            .addRoleOption(o => o.setName('staff').setDescription('Staff role').setRequired(false))
+            .addRoleOption(o => o.setName('ia_role').setDescription('IA role').setRequired(false))
+            .addRoleOption(o => o.setName('management_role').setDescription('Management role').setRequired(false)),
+        new SlashCommandBuilder()
+            .setName('application-result')
+            .setDescription('Post an application result (Accepted / Denied)')
+            .addStringOption(opt =>
+                opt.setName('status')
+                    .setDescription('Accepted or Denied')
+                    .setRequired(true)
+                    .addChoices(
+                        { name: 'Accepted', value: 'accepted' },
+                        { name: 'Denied', value: 'denied' }
+                    ))
+            .addUserOption(opt =>
+                opt.setName('user')
+                    .setDescription('The applicant')
+                    .setRequired(true))
+            .addStringOption(opt =>
+                opt.setName('reason')
+                    .setDescription('Optional short reason (for denied)')
+                    .setRequired(false)),
     ];
 
     await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
 
-    console.log(`✅ ${client.user.tag} is online and commands registered`);
+    console.log(`✅ ${client.user.tag} online • Commands registered`);
 });
 
 client.login(process.env.TOKEN);
