@@ -73,7 +73,7 @@ const TICKET_ROLE_ID = "1474234032677060795";
 const TICKET_COOLDOWN_MS = 2 * 60 * 1000;
 const TOKEN = process.env.TOKEN;
 const PORT = Number(process.env.PORT) || 3000;
-const GUILD_ID = '1472277307002589216'; // ← your guild ID
+const GUILD_ID = '1472277307002589216'; // Your guild ID
 
 const ticketData = new Map();
 const userLastTicketOpen = new Map();
@@ -494,21 +494,37 @@ client.on('interactionCreate', async (interaction) => {
                           "We are currently accepting applications for:\n" +
                           "• Staff Team (Moderators, Helpers, Administrators)\n\n" +
                           "All applications are reviewed by management. Make sure you meet the requirements listed in #「🌸」·applications before applying.\n\n" +
-                          "🔗 **Apply here:** https://your-application-link.com" // ← replace with real link
+                          "🔗 **Apply here:** https://your-application-link.com\n\n" +
+                          "We look forward to potentially welcoming you to the team!"
                 },
                 ig_rules: {
                     title: "🎮 In-Game Rules (ER:LC RP Standards)",
                     desc: "**Alaska State RolePlay • In-Game Rules**\n\n" +
-                          "These rules are in place to maintain serious, high-quality roleplay...\n\n" +
-                          "1. Serious Roleplay Only\n • No trolling, meme RP...\n" +
-                          // ... add the full text you had originally ...
+                          "These rules are in place to maintain serious, high-quality roleplay in Emergency Response: Liberty County.\n\n" +
+                          "1. **Serious Roleplay Only**\n • No trolling, meme RP, fail RP, or unrealistic behavior.\n • All actions must be believable in a real-world emergency/civilian context.\n\n" +
+                          "2. **Fear & New Life Rule (NLR)**\n • Value your life realistically — do not act fearless when weapons are drawn.\n • After death, you forget previous events for **15 minutes** and cannot return to the scene or seek revenge.\n\n" +
+                          "3. **No RDM / VDM**\n • Random Deathmatch (killing without valid RP reason) = severe punishment.\n • Vehicle Deathmatch (running people over without RP) = same.\n\n" +
+                          "4. **No Powergaming / Metagaming**\n • No forcing actions on others without consent.\n • No using out-of-character (OOC) information in-character.\n\n" +
+                          "5. **No Exploits, Hacks, or Glitches**\n • Any form of cheating, bug abuse, or unfair advantage = permanent ban.\n\n" +
+                          "6. **Realistic Interactions & Pursuits**\n • Proper use of radios, handcuffs, sirens, etc.\n • No cop baiting, excessive reckless driving without RP reason.\n • Criminals must commit crimes with buildup — no random mass chaos.\n\n" +
+                          "7. **Department & Job Guidelines**\n • Follow chain of command and department protocols.\n • EMS must prioritize life-saving over arrests.\n • Police must have probable cause before searches/arrests.\n\n" +
+                          "Violations → Warning → Kick → Temporary Ban → Permanent Ban (depending on severity).\nStaff decisions are final."
                 },
                 dc_rules: {
                     title: "📜 Discord Server Rules",
                     desc: "**Alaska State RolePlay • Discord Rules**\n\n" +
-                          "Breaking any rule may result in warnings...\n\n" +
-                          "1. Respect & No Toxicity\n • No harassment...\n" +
-                          // ... full text ...
+                          "Breaking any rule may result in warnings, mutes, kicks, or bans depending on severity.\n\n" +
+                          "1. **Respect & No Toxicity**\n • No harassment, slurs, hate speech, bullying, or targeted attacks.\n • Zero tolerance for discrimination (race, gender, sexuality, religion, etc.).\n\n" +
+                          "2. **No NSFW / Explicit Content**\n • No pornography, gore, suggestive images/text, or links.\n • Keep the server family-friendly (Roblox community).\n\n" +
+                          "3. **No Spam / Flooding**\n • No excessive emojis, copypasta, caps spam, mention spam, or zalgo.\n • Use channels for their intended purpose.\n\n" +
+                          "4. **No Advertising / Self-Promotion**\n • No unsolicited server invites, YouTube/TikTok/Instagram promo, or DM advertising.\n • Partnerships only through official management.\n\n" +
+                          "5. **No Unnecessary Pings / Staff Abuse**\n • Do not ping @Staff, @here, @everyone without valid emergency.\n • False ticket opens or pings = punishment.\n\n" +
+                          "6. **No Drama / Public Callouts**\n • Keep personal conflicts private — no public stirring or callouts.\n • Report issues to staff privately via tickets.\n\n" +
+                          "7. **No Impersonation**\n • Do not pretend to be staff, fake ranks, or use misleading nicknames.\n\n" +
+                          "8. **Follow Roblox & Discord ToS**\n • No ban evasion, doxxing, threats, illegal content, or sharing personal information.\n\n" +
+                          "9. **English in Public Channels**\n • Main language is English — other languages allowed in appropriate or private channels.\n\n" +
+                          "10. **Staff Instructions**\n • Follow directions from staff members.\n • Arguing with staff punishments may lead to further action.\n\n" +
+                          "Use #appeals or open a ticket if you believe a punishment was unfair."
                 },
                 vehicle_livery: {
                     title: "ASRP | Vehicle Livery Dashboard",
@@ -529,7 +545,7 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ embeds: [embed], ephemeral: true });
         }
 
-        // Departments dropdown (everyone)
+        // Departments dropdown
         if (interaction.isStringSelectMenu() && interaction.customId === 'select_department') {
             const value = interaction.values[0];
 
@@ -556,7 +572,7 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: replyText, ephemeral: true });
         }
 
-        // Ticket creation flow - department selection
+        // Ticket creation - department selection
         if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_type') {
             await interaction.deferReply({ ephemeral: true });
 
@@ -729,35 +745,59 @@ client.on('interactionCreate', async (interaction) => {
 
             const reason = interaction.fields.getTextInputValue('reason') || 'No reason provided';
 
-            await channel.send({ content: `Ticket closing - Reason: ${reason}` });
+            const transcript = await saveTranscript(channel);
+            await logTicketClose(interaction, data, transcript, reason);
 
-            // Clean up
+            const openerMember = await interaction.guild.members.fetch(data.openerId).catch(() => null);
+            if (openerMember) await openerMember.roles.remove(TICKET_ROLE_ID).catch(() => {});
+
+            await channel.send({
+                embeds: [new EmbedBuilder()
+                    .setColor(0xff5555)
+                    .setDescription(`Ticket closed by ${interaction.user}.\n**Reason:** ${reason}`)]
+            });
+
             ticketData.delete(channel.id);
             await saveTicketState();
-            await channel.delete().catch(console.error);
 
-            return interaction.editReply({ content: "Ticket closed.", ephemeral: true });
+            await interaction.editReply({ content: "Closing ticket...", ephemeral: true });
+
+            setTimeout(() => channel.delete().catch(console.error), 6000);
         }
 
         // Close by ID modal
         if (interaction.isModalSubmit() && interaction.customId.startsWith('close_by_id_')) {
+            await interaction.deferReply({ ephemeral: true });
+
             const ticketId = interaction.customId.replace('close_by_id_', '');
             const data = ticketData.get(ticketId);
 
-            if (!data) return interaction.reply({ content: "Ticket not found.", ephemeral: true });
+            if (!data) return interaction.editReply({ content: "Ticket not found.", ephemeral: true });
 
             const reason = interaction.fields.getTextInputValue('reason') || 'No reason provided';
             const channel = interaction.guild.channels.cache.get(ticketId);
 
             if (channel) {
-                await channel.send({ content: `Ticket closed by ${interaction.user} (admin) - Reason: ${reason}` });
-                await channel.delete().catch(console.error);
+                const transcript = await saveTranscript(channel);
+                await logTicketClose(interaction, data, transcript, reason);
+
+                await channel.send({
+                    embeds: [new EmbedBuilder()
+                        .setColor(0xff5555)
+                        .setDescription(`Ticket closed by ${interaction.user} (via /ticketclose).\n**Reason:** ${reason}`)]
+                });
+
+                ticketData.delete(ticketId);
+                await saveTicketState();
+
+                await interaction.editReply({ content: "Closing ticket...", ephemeral: true });
+
+                setTimeout(() => channel.delete().catch(console.error), 6000);
+            } else {
+                ticketData.delete(ticketId);
+                await saveTicketState();
+                await interaction.editReply({ content: "Ticket channel already gone.", ephemeral: true });
             }
-
-            ticketData.delete(ticketId);
-            await saveTicketState();
-
-            return interaction.reply({ content: "Ticket closed successfully.", ephemeral: true });
         }
 
     } catch (err) {
