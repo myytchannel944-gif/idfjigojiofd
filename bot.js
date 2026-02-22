@@ -1,4 +1,4 @@
-require('dotenv').config();
+rrequire('dotenv').config();
 const fs = require('fs/promises');
 const path = require('path');
 const express = require('express');
@@ -73,6 +73,7 @@ const TICKET_ROLE_ID = "1474234032677060795";
 const TICKET_COOLDOWN_MS = 2 * 60 * 1000;
 const TOKEN = process.env.TOKEN;
 const PORT = Number(process.env.PORT) || 3000;
+const GUILD_ID = '1472277307002589216'; // ← your guild ID
 
 const ticketData = new Map();
 const userLastTicketOpen = new Map();
@@ -92,10 +93,6 @@ const PRIORITY_EMOJIS = { low: '🟢', medium: '🟡', high: '🟠', urgent: '�
 const PRIORITY_COLORS = { low: 0x00FF00, medium: 0xFFFF00, high: 0xFFA500, urgent: 0xFF0000 };
 
 // ─── Helpers ──────────────────────────────────────────────
-function isBotOwner(interaction) {
-    return interaction.user.id === BOT_OWNER_ID;
-}
-
 function isFoundership(member) {
     return member.roles.cache.has(FOUNDERSHIP_ROLE_ID);
 }
@@ -104,13 +101,6 @@ function getPingRole(department) {
     if (department === 'internal-affairs') return config.iaRole;
     if (department === 'management' || department === 'partnership') return config.mgmtRole;
     return config.staffRole;
-}
-
-function isSupportStaff(member) {
-    if (!member) return false;
-    const supportRoles = [config.staffRole, config.iaRole, config.mgmtRole].filter(Boolean);
-    return supportRoles.some(roleId => member.roles.cache.has(roleId)) ||
-           member.permissions.has(PermissionsBitField.Flags.Administrator);
 }
 
 function findExistingTicket(guild, openerId) {
@@ -124,13 +114,6 @@ function findExistingTicket(guild, openerId) {
         return channelId;
     }
     return null;
-}
-
-function formatSetupValue(value, type = 'id') {
-    if (!value) return 'Not set';
-    if (type === 'channel') return `<#${value}>`;
-    if (type === 'role') return `<@&${value}>`;
-    return value;
 }
 
 async function loadTicketState() {
@@ -243,162 +226,320 @@ async function logTicketClose(interaction, data, transcriptInfo, closeReason = '
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand() && !interaction.isStringSelectMenu() && !interaction.isButton() && !interaction.isModalSubmit()) return;
 
-    // Global restriction: ONLY Foundership role can use slash commands
+    // Restrict ONLY slash commands to Foundership
     if (interaction.isChatInputCommand()) {
         if (!interaction.member.roles.cache.has(FOUNDERSHIP_ROLE_ID)) {
             return interaction.reply({
                 content: "🚫 This bot is restricted to Foundership members only.",
-                flags: MessageFlags.Ephemeral
+                ephemeral: true
             });
         }
     }
 
     try {
-        // 1. DASHBOARD COMMAND
-        if (interaction.isChatInputCommand() && interaction.commandName === 'dashboard') {
-            const embed = new EmbedBuilder()
-                .setAuthor({ name: "ALASKA STATE ROLEPLAY • OFFICIAL DIRECTORY", iconURL: DASHBOARD_ICON })
-                .setTitle("Dashboard")
-                .setDescription(
-                    "**Welcome to Alaska State RolePlay!**\n\n" +
-                    "Welcome to the best ER:LC roleplay community. Here you will find all of the information needed to get started.\n\n" +
-                    "Before participating, make sure you've read and understand our rules and application process.\n" +
-                    "Use the menu below to navigate."
-                )
-                .setColor(BOT_COLOR)
-                .setImage(DASHBOARD_ICON)
-                .setTimestamp();
+        // ── Slash Commands (Foundership only) ──────────────────────────────
 
-            const menu = new StringSelectMenuBuilder()
-                .setCustomId('asrp_dashboard')
-                .setPlaceholder('Select an option...')
-                .addOptions([
-                    { label: 'Staff Applications', value: 'staff_apps', description: 'Join the ASRP team', emoji: '📝' },
-                    { label: 'In-Game Rules', value: 'ig_rules', description: 'ER:LC Penal Code', emoji: '🎮' },
-                    { label: 'Discord Rules', value: 'dc_rules', description: 'Community Guidelines', emoji: '📜' },
-                    { label: 'Vehicle Livery Dashboard', value: 'vehicle_livery', description: 'View current ASRP fleet status', emoji: '🚓' },
-                ]);
+        if (interaction.isChatInputCommand()) {
+            // /dashboard
+            if (interaction.commandName === 'dashboard') {
+                const embed = new EmbedBuilder()
+                    .setAuthor({ name: "ALASKA STATE ROLEPLAY • OFFICIAL DIRECTORY", iconURL: DASHBOARD_ICON })
+                    .setTitle("Dashboard")
+                    .setDescription("Welcome to the best ER:LC roleplay community...\nUse the menu below.")
+                    .setColor(BOT_COLOR)
+                    .setImage(DASHBOARD_ICON)
+                    .setTimestamp();
 
-            const menuRow = new ActionRowBuilder().addComponents(menu);
+                const menu = new StringSelectMenuBuilder()
+                    .setCustomId('asrp_dashboard')
+                    .setPlaceholder('Select an option...')
+                    .addOptions([
+                        { label: 'Staff Applications', value: 'staff_apps', emoji: '📝' },
+                        { label: 'In-Game Rules', value: 'ig_rules', emoji: '🎮' },
+                        { label: 'Discord Rules', value: 'dc_rules', emoji: '📜' },
+                        { label: 'Vehicle Livery Dashboard', value: 'vehicle_livery', emoji: '🚓' },
+                    ]);
 
-            await interaction.channel.send({ embeds: [embed], components: [menuRow] });
+                await interaction.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)] });
+                return interaction.reply({ content: "✅ Dashboard deployed.", ephemeral: true });
+            }
 
-            return interaction.reply({ content: "✅ Dashboard deployed.", flags: MessageFlags.Ephemeral });
-        }
+            // /deptdashboard
+            if (interaction.commandName === 'deptdashboard') {
+                const embed = new EmbedBuilder()
+                    .setTitle('🏔️ Alaska State Roleplay')
+                    .setDescription('Select a department from the dropdown...')
+                    .setColor(5793266)
+                    .addFields(
+                        { name: '🚓 Alaska State Troopers', value: '🟢 **OPEN**' },
+                        { name: '🚧 Alaska Department of Transportation', value: '🟢 **OPEN**' },
+                        { name: '🚔 Alaska Police Department', value: '🔴 **CLOSED**' },
+                        { name: '🚒 Alaska Fire Department', value: '🔴 **CLOSED**' },
+                        { name: '🕵️‍♂️ FBI', value: '🟢 **OPEN**' }
+                    );
 
-        // 2. DEPT DASHBOARD COMMAND
-        if (interaction.isChatInputCommand() && interaction.commandName === 'deptdashboard') {
-            const dashboardEmbed = new EmbedBuilder()
-                .setTitle('🏔️ Alaska State Roleplay')
-                .setDescription(
-                    '━━━━━━━━━━━━━━━━━━\n**Departments Dashboard**\n━━━━━━━━━━━━━━━━━━\n\n' +
-                    'Select a department from the dropdown to get your invite and instructions.\n\n' +
-                    '🚨 Professionalism is required\n📋 Follow all server rules\n⚠️ Abuse of roles will result in removal'
-                )
-                .setColor(5793266)
-                .addFields(
-                    { name: '🚓 Alaska State Troopers', value: '🟢 **OPEN**\nStatewide law enforcement. Handles highways, rural patrol, and major incidents.', inline: false },
-                    { name: '🚧 Alaska Department of Transportation', value: '🟢 **OPEN**\nHandles traffic control, road work, and scene support.', inline: false },
-                    { name: '🚔 Alaska Police Department', value: '🔴 **CLOSED**\nCurrently in development.', inline: false },
-                    { name: '🚒 Alaska Fire Department', value: '🔴 **CLOSED**\nCurrently in development.', inline: false },
-                    { name: '🕵️‍♂️ FBI', value: '🟢 **OPEN**\nFederal investigations, special operations, high-priority cases.', inline: false }
-                )
-                .setFooter({ text: 'Alaska State Roleplay • Departments System' })
-                .setTimestamp();
+                const menu = new StringSelectMenuBuilder()
+                    .setCustomId('select_department')
+                    .setPlaceholder('Select a department...')
+                    .addOptions([
+                        { label: 'Alaska State Troopers', value: 'ast', emoji: '🚓' },
+                        { label: 'Alaska Department of Transportation', value: 'dot', emoji: '🚧' },
+                        { label: 'Alaska Police Department', value: 'apd', emoji: '🚔', disabled: true },
+                        { label: 'Alaska Fire Department', value: 'afd', emoji: '🚒', disabled: true },
+                        { label: 'FBI', value: 'fbi', emoji: '🕵️‍♂️' }
+                    ]);
 
-            const departmentDropdown = new StringSelectMenuBuilder()
-                .setCustomId('select_department')
-                .setPlaceholder('Select a department...')
-                .addOptions(
-                    { label: 'Alaska State Troopers', value: 'ast', description: 'Join AST server', emoji: '🚓' },
-                    { label: 'Alaska Department of Transportation', value: 'dot', description: 'Join DOT server', emoji: '🚧' },
-                    { label: 'Alaska Police Department', value: 'apd', description: 'Currently in development', emoji: '🚔', disabled: true },
-                    { label: 'Alaska Fire Department', value: 'afd', description: 'Currently in development', emoji: '🚒', disabled: true },
-                    { label: 'FBI', value: 'fbi', description: 'Join FBI server', emoji: '🕵️‍♂️' }
+                await interaction.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)] });
+                return interaction.reply({ content: "✅ Departments dashboard deployed.", ephemeral: true });
+            }
+
+            // /ticketstats
+            if (interaction.commandName === 'ticketstats') {
+                const openTickets = Array.from(ticketData.values());
+                const total = openTickets.length;
+                const claimed = openTickets.filter(t => t.claimedBy).length;
+                const unclaimed = total - claimed;
+
+                const byPriority = openTickets.reduce((acc, t) => {
+                    const p = t.priority ? t.priority.toUpperCase() : 'UNKNOWN';
+                    acc[p] = (acc[p] || 0) + 1;
+                    return acc;
+                }, {});
+
+                const priorityFields = ['URGENT', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN']
+                    .filter(p => byPriority[p] > 0)
+                    .map(p => ({
+                        name: `${PRIORITY_EMOJIS[p.toLowerCase()] || '❓'} ${p}`,
+                        value: `**${byPriority[p]}**`,
+                        inline: true
+                    }));
+
+                const embed = new EmbedBuilder()
+                    .setColor(0x1E90FF)
+                    .setTitle('Alaska State Roleplay • Ticket Overview')
+                    .setDescription('Current support ticket system status')
+                    .setThumbnail(DASHBOARD_ICON)
+                    .addFields(
+                        { name: 'Total Open', value: `**${total}**`, inline: true },
+                        { name: 'Claimed', value: `**${claimed}**`, inline: true },
+                        { name: 'Unclaimed', value: `**${unclaimed}**`, inline: true },
+                        ...priorityFields
+                    )
+                    .setFooter({ text: `Updated ${new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })} EST` })
+                    .setTimestamp();
+
+                return interaction.reply({ embeds: [embed], ephemeral: true });
+            }
+
+            // /ticketclose
+            if (interaction.commandName === 'ticketclose') {
+                const ticketId = interaction.options.getString('ticket_id', true);
+                const data = ticketData.get(ticketId);
+
+                if (!data || !interaction.guild.channels.cache.has(ticketId)) {
+                    return interaction.reply({ content: "Invalid or closed ticket.", ephemeral: true });
+                }
+
+                const modal = new ModalBuilder()
+                    .setCustomId(`close_by_id_${ticketId}`)
+                    .setTitle('Close Ticket - Reason Required');
+
+                modal.addComponents(
+                    new ActionRowBuilder().addComponents(
+                        new TextInputBuilder()
+                            .setCustomId('reason')
+                            .setLabel('Reason')
+                            .setStyle(TextInputStyle.Paragraph)
+                            .setRequired(true)
+                    )
                 );
 
-            const dashboardRow = new ActionRowBuilder().addComponents(departmentDropdown);
+                await interaction.showModal(modal);
+                return;
+            }
 
-            await interaction.channel.send({ embeds: [dashboardEmbed], components: [dashboardRow] });
+            // /ticketpriority
+            if (interaction.commandName === 'ticketpriority') {
+                const ticketId = interaction.options.getString('ticket_id', true);
+                const priority = interaction.options.getString('priority', true).toLowerCase();
 
-            return interaction.reply({ content: "✅ Departments dashboard deployed.", flags: MessageFlags.Ephemeral });
+                if (!['low', 'medium', 'high', 'urgent'].includes(priority)) {
+                    return interaction.reply({ content: "Invalid priority. Use: low, medium, high, urgent", ephemeral: true });
+                }
+
+                const data = ticketData.get(ticketId);
+                if (!data) return interaction.reply({ content: "Ticket not found.", ephemeral: true });
+
+                const channel = interaction.guild.channels.cache.get(ticketId);
+                if (!channel) return interaction.reply({ content: "Channel not found.", ephemeral: true });
+
+                const isClaimer = data.claimedBy && data.claimedBy === interaction.user.id;
+                if (!isClaimer && !isFoundership(interaction.member)) {
+                    return interaction.reply({ content: "Only claimer or Foundership can change priority.", ephemeral: true });
+                }
+
+                data.priority = priority;
+                ticketData.set(ticketId, data);
+                await saveTicketState();
+
+                // Update channel name if possible
+                const nameParts = channel.name.split('-');
+                const newName = `${nameParts[0]}-${priority}-${nameParts.slice(-1)}`.slice(0, 100);
+                await channel.setName(newName).catch(() => {});
+
+                // Send confirmation
+                await channel.send({
+                    embeds: [new EmbedBuilder()
+                        .setColor(PRIORITY_COLORS[priority])
+                        .setDescription(`**Priority changed to ${priority.toUpperCase()}** ${PRIORITY_EMOJIS[priority]} by ${interaction.user}`)]
+                });
+
+                return interaction.reply({ content: `Priority updated to **${priority.toUpperCase()}**`, ephemeral: true });
+            }
+
+            // /setup (example – expand as needed)
+            if (interaction.commandName === 'setup') {
+                const logs = interaction.options.getChannel('logs');
+                const staff = interaction.options.getRole('staff');
+                const ia = interaction.options.getRole('ia_role');
+                const mgmt = interaction.options.getRole('management_role');
+
+                if (logs) config.logChannel = logs.id;
+                if (staff) config.staffRole = staff.id;
+                if (ia) config.iaRole = ia.id;
+                if (mgmt) config.mgmtRole = mgmt.id;
+
+                await saveConfig();
+
+                const setupEmbed = new EmbedBuilder()
+                    .setColor(BOT_COLOR)
+                    .setTitle('Setup Updated')
+                    .addFields(
+                        { name: 'Logs Channel', value: formatSetupValue(config.logChannel, 'channel'), inline: true },
+                        { name: 'Staff Role', value: formatSetupValue(config.staffRole, 'role'), inline: true },
+                        { name: 'IA Role', value: formatSetupValue(config.iaRole, 'role'), inline: true },
+                        { name: 'Management Role', value: formatSetupValue(config.mgmtRole, 'role'), inline: true },
+                    )
+                    .setFooter({ text: `Ticket cooldown: ${Math.round(TICKET_COOLDOWN_MS / 1000)}s` });
+
+                return interaction.reply({ embeds: [setupEmbed], ephemeral: true });
+            }
+
+            // /ticketpersonadd
+            if (interaction.commandName === 'ticketpersonadd') {
+                const user = interaction.options.getUser('user', true);
+                const channel = interaction.channel;
+                const data = ticketData.get(channel.id);
+
+                if (!data) return interaction.reply({ content: "Not a ticket channel.", ephemeral: true });
+
+                const isClaimer = data.claimedBy === interaction.user.id;
+                if (!isClaimer && !isFoundership(interaction.member)) {
+                    return interaction.reply({ content: "Only claimer or Foundership can add users.", ephemeral: true });
+                }
+
+                await channel.permissionOverwrites.edit(user.id, {
+                    ViewChannel: true,
+                    SendMessages: true,
+                    ReadMessageHistory: true
+                });
+
+                return interaction.reply({ content: `Added ${user} to ticket.`, ephemeral: true });
+            }
+
+            // /ticketpersonremove (similar)
+            if (interaction.commandName === 'ticketpersonremove') {
+                const user = interaction.options.getUser('user', true);
+                const channel = interaction.channel;
+                const data = ticketData.get(channel.id);
+
+                if (!data) return interaction.reply({ content: "Not a ticket channel.", ephemeral: true });
+
+                const isClaimer = data.claimedBy === interaction.user.id;
+                if (!isClaimer && !isFoundership(interaction.member)) {
+                    return interaction.reply({ content: "Only claimer or Foundership can remove users.", ephemeral: true });
+                }
+
+                await channel.permissionOverwrites.delete(user.id);
+                return interaction.reply({ content: `Removed ${user} from ticket.`, ephemeral: true });
+            }
         }
 
-        // 3. DEPARTMENT DROPDOWN HANDLER
+        // ── Public Interactions ─────────────────────────────────────────────
+
+        // Dashboard dropdown (everyone)
+        if (interaction.isStringSelectMenu() && interaction.customId === 'asrp_dashboard') {
+            const responses = {
+                staff_apps: { title: "Staff Applications", desc: "We are currently accepting applications..." },
+                ig_rules: { title: "In-Game Rules", desc: "Serious roleplay only. No RDM, VDM, powergaming..." },
+                dc_rules: { title: "Discord Rules", desc: "Respect, no toxicity, no spam..." },
+                vehicle_livery: { title: "Vehicle Livery Dashboard", desc: "All vehicles are currently **active** and deployed." }
+            };
+
+            const res = responses[interaction.values[0]] || { title: "Invalid", desc: "Option not found." };
+
+            const embed = new EmbedBuilder()
+                .setTitle(res.title)
+                .setDescription(res.desc)
+                .setColor(BOT_COLOR)
+                .setThumbnail(DASHBOARD_ICON);
+
+            return interaction.reply({ embeds: [embed], ephemeral: true });
+        }
+
+        // Departments dropdown (everyone)
         if (interaction.isStringSelectMenu() && interaction.customId === 'select_department') {
-            const value = interaction.values[0];
+            const replies = {
+                ast: '✅ **Alaska State Troopers** is **OPEN**!\nJoin here: https://discord.gg/WhP5Xk85Yw',
+                dot: '✅ **Alaska Department of Transportation** is **OPEN**!\nJoin here: https://discord.gg/JCPDApbKmH',
+                apd: '🔴 **Alaska Police Department** is currently **CLOSED**.',
+                afd: '🔴 **Alaska Fire Department** is currently **CLOSED**.',
+                fbi: '✅ **FBI** is **OPEN**!\nJoin here: https://discord.gg/fQC227yJZT'
+            };
 
-            let replyText = 'Unknown department selected.';
-
-            switch (value) {
-                case 'ast':
-                    replyText = '✅ **Alaska State Troopers** is **OPEN**!\nJoin here: https://discord.gg/WhP5Xk85Yw';
-                    break;
-                case 'dot':
-                    replyText = '✅ **Alaska Department of Transportation** is **OPEN**!\nJoin here: https://discord.gg/JCPDApbKmH';
-                    break;
-                case 'apd':
-                    replyText = '🔴 **Alaska Police Department** is currently **CLOSED** / in development.';
-                    break;
-                case 'afd':
-                    replyText = '🔴 **Alaska Fire Department** is currently **CLOSED** / in development.';
-                    break;
-                case 'fbi':
-                    replyText = '✅ **FBI** is **OPEN**!\nJoin here: https://discord.gg/fQC227yJZT';
-                    break;
-            }
-
-            return interaction.reply({ content: replyText, flags: MessageFlags.Ephemeral });
+            return interaction.reply({ content: replies[interaction.values[0]] || 'Unknown department.', ephemeral: true });
         }
 
-        // 4. TICKET CREATION – Department selection
+        // Ticket creation – department selection
         if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_type') {
-            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-            if (!config.staffRole || !config.iaRole || !config.mgmtRole) {
-                return interaction.editReply({ content: "⚠️ Run `/setup` first to configure roles.", flags: MessageFlags.Ephemeral });
-            }
+            await interaction.deferReply({ ephemeral: true });
 
             const dept = interaction.values[0];
             const pingRoleId = getPingRole(dept);
-            if (!pingRoleId) return interaction.editReply({ content: "⚠️ Department role not set.", flags: MessageFlags.Ephemeral });
+            if (!pingRoleId) return interaction.editReply({ content: "Department role not set.", ephemeral: true });
 
             const existing = findExistingTicket(interaction.guild, interaction.user.id);
-            if (existing) return interaction.editReply({ content: `⚠️ You already have a ticket: <#${existing}>`, flags: MessageFlags.Ephemeral });
+            if (existing) return interaction.editReply({ content: `You already have a ticket: <#${existing}>`, ephemeral: true });
 
             const lastOpen = userLastTicketOpen.get(interaction.user.id) || 0;
             const cooldownLeft = TICKET_COOLDOWN_MS - (Date.now() - lastOpen);
             if (cooldownLeft > 0) {
-                return interaction.editReply({ content: `⏳ Wait ${Math.ceil(cooldownLeft / 1000)}s.`, flags: MessageFlags.Ephemeral });
+                return interaction.editReply({ content: `⏳ Wait ${Math.ceil(cooldownLeft / 1000)}s.`, ephemeral: true });
             }
 
-            // Ask for priority
             const priorityMenu = new StringSelectMenuBuilder()
                 .setCustomId(`ticket_priority_${dept}`)
                 .setPlaceholder('Select ticket priority...')
                 .addOptions([
-                    { label: 'Low', value: 'low', emoji: '🟢', description: 'General inquiry / non-urgent' },
-                    { label: 'Medium', value: 'medium', emoji: '🟡', description: 'Standard support request' },
-                    { label: 'High', value: 'high', emoji: '🟠', description: 'Time-sensitive issue' },
+                    { label: 'Low', value: 'low', emoji: '🟢', description: 'General inquiry' },
+                    { label: 'Medium', value: 'medium', emoji: '🟡', description: 'Standard request' },
+                    { label: 'High', value: 'high', emoji: '🟠', description: 'Time-sensitive' },
                     { label: 'Urgent', value: 'urgent', emoji: '🔴', description: 'Critical / emergency' },
                 ]);
 
-            const row = new ActionRowBuilder().addComponents(priorityMenu);
-
             await interaction.editReply({
-                content: `Ticket for **${dept.toUpperCase()}** – please select priority:`,
-                components: [row],
-                flags: MessageFlags.Ephemeral
+                content: `Ticket for **${dept.toUpperCase()}** – select priority:`,
+                components: [new ActionRowBuilder().addComponents(priorityMenu)],
+                ephemeral: true
             });
         }
 
-        // 5. Priority selection → create ticket
+        // Ticket creation – priority selection
         if (interaction.isStringSelectMenu() && interaction.customId.startsWith('ticket_priority_')) {
             await interaction.deferUpdate();
 
             const dept = interaction.customId.split('_')[2];
             const priority = interaction.values[0];
-
             const pingRoleId = getPingRole(dept);
 
             await interaction.member.roles.add(TICKET_ROLE_ID).catch(() => {});
@@ -425,7 +566,7 @@ client.on('interactionCreate', async (interaction) => {
                 });
             } catch (err) {
                 console.error('Channel creation failed:', err);
-                return interaction.editReply({ content: "❌ Failed to create ticket channel.", flags: MessageFlags.Ephemeral });
+                return interaction.editReply({ content: "Failed to create ticket channel.", ephemeral: true });
             }
 
             ticketData.set(channel.id, {
@@ -460,279 +601,163 @@ client.on('interactionCreate', async (interaction) => {
                 components: [buttons],
             });
 
-            await interaction.editReply({ content: `✅ Ticket created → ${channel} (Priority: ${priority.toUpperCase()})`, flags: MessageFlags.Ephemeral });
+            await interaction.editReply({ content: `✅ Ticket created → ${channel} (Priority: ${priority.toUpperCase()})`, ephemeral: true });
         }
 
-        // 6. TICKET STATS (professional version)
-        if (interaction.isChatInputCommand() && interaction.commandName === 'ticketstats') {
-            try {
-                const openTickets = Array.from(ticketData.values());
+        // Ticket buttons: Claim
+        if (interaction.isButton() && interaction.customId === 'claim_ticket') {
+            const channel = interaction.channel;
+            const data = ticketData.get(channel.id);
+            if (!data) return interaction.reply({ content: "Ticket no longer exists.", ephemeral: true });
 
-                const byPriority = openTickets.reduce((acc, ticket) => {
-                    const pri = ticket.priority ? ticket.priority.toUpperCase() : 'UNKNOWN';
-                    acc[pri] = (acc[pri] || 0) + 1;
-                    return acc;
-                }, {});
-
-                const totalOpen = openTickets.length;
-                const claimedCount = openTickets.filter(t => t.claimedBy).length;
-                const unclaimedCount = totalOpen - claimedCount;
-
-                const priorityOrder = ['URGENT', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'];
-                const priorityFields = priorityOrder
-                    .filter(p => byPriority[p] !== undefined)
-                    .map(p => ({
-                        name: `${PRIORITY_EMOJIS[p.toLowerCase()] || '❓'} ${p}`,
-                        value: `**${byPriority[p]}** tickets`,
-                        inline: true
-                    }));
-
-                const embed = new EmbedBuilder()
-                    .setColor(0x1E90FF)
-                    .setTitle('Alaska State Roleplay • Ticket Overview')
-                    .setDescription('Current status of the support ticket system')
-                    .setThumbnail(DASHBOARD_ICON)
-                    .addFields(
-                        { name: '📊 Total Open Tickets', value: `**${totalOpen}**`, inline: true },
-                        { name: '✅ Claimed', value: `**${claimedCount}**`, inline: true },
-                        { name: '⏳ Unclaimed', value: `**${unclaimedCount}**`, inline: true },
-                        ...priorityFields
-                    )
-                    .setFooter({ 
-                        text: `Last updated • ${new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })} EST`,
-                        iconURL: DASHBOARD_ICON 
-                    })
-                    .setTimestamp();
-
-                return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
-            } catch (statsErr) {
-                console.error('Ticketstats command failed:', statsErr);
-                return interaction.reply({
-                    content: "❌ Failed to load ticket statistics. Please try again later.",
-                    flags: MessageFlags.Ephemeral
-                });
+            if (data.claimedBy) {
+                return interaction.reply({ content: `Already claimed by <@${data.claimedBy}>.`, ephemeral: true });
             }
+
+            data.claimedBy = interaction.user.id;
+            ticketData.set(channel.id, data);
+            await saveTicketState();
+
+            await channel.permissionOverwrites.edit(interaction.user.id, {
+                SendMessages: true,
+                ViewChannel: true,
+                ReadMessageHistory: true
+            });
+
+            await interaction.message.edit({
+                components: [new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId('close_ticket').setLabel('Close').setStyle(ButtonStyle.Danger)
+                )]
+            });
+
+            await channel.send({ content: `✅ Ticket claimed by ${interaction.user}` });
+            return interaction.deferUpdate();
         }
 
-        // 7. TICKET CLOSE BY ID
-        if (interaction.isChatInputCommand() && interaction.commandName === 'ticketclose') {
-            const ticketId = interaction.options.getString('ticket_id', true);
+        // Ticket buttons: Close
+        if (interaction.isButton() && interaction.customId === 'close_ticket') {
+            const channel = interaction.channel;
+            const data = ticketData.get(channel.id);
+            if (!data) return interaction.reply({ content: "Ticket no longer exists.", ephemeral: true });
 
-            const data = ticketData.get(ticketId);
-            if (!data || !interaction.guild.channels.cache.has(ticketId)) {
-                return interaction.reply({
-                    content: "❌ Invalid or closed ticket ID.",
-                    flags: MessageFlags.Ephemeral
-                });
-            }
-
-            const channel = interaction.guild.channels.cache.get(ticketId);
-            if (!channel) {
-                ticketData.delete(ticketId);
-                await saveTicketState();
-                return interaction.reply({
-                    content: "❌ That ticket channel no longer exists.",
-                    flags: MessageFlags.Ephemeral
-                });
+            const isClaimer = data.claimedBy === interaction.user.id;
+            if (!isClaimer && !isFoundership(interaction.member)) {
+                return interaction.reply({ content: "Only the claimer or Foundership can close this ticket.", ephemeral: true });
             }
 
             const modal = new ModalBuilder()
-                .setCustomId(`close_by_id_modal_${ticketId}`)
-                .setTitle('Close Ticket by ID - Reason Required');
+                .setCustomId('close_ticket_modal')
+                .setTitle('Close Ticket - Reason Required');
 
-            const reasonInput = new TextInputBuilder()
-                .setCustomId('close_reason')
-                .setLabel('Why is this ticket being closed?')
-                .setStyle(TextInputStyle.Paragraph)
-                .setRequired(true)
-                .setPlaceholder('Enter reason here... (will be logged)');
-
-            modal.addComponents(new ActionRowBuilder().addComponents(reasonInput));
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('reason')
+                        .setLabel('Why are you closing this ticket?')
+                        .setStyle(TextInputStyle.Paragraph)
+                        .setRequired(true)
+                )
+            );
 
             await interaction.showModal(modal);
             return;
         }
 
-        // 8. CLOSE BY ID MODAL HANDLER
-        if (interaction.isModalSubmit() && interaction.customId.startsWith('close_by_id_modal_')) {
-            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        // Close modal handler
+        if (interaction.isModalSubmit() && interaction.customId === 'close_ticket_modal') {
+            await interaction.deferReply({ ephemeral: true });
 
-            const ticketId = interaction.customId.split('_')[3];
+            const channel = interaction.channel;
+            const data = ticketData.get(channel.id);
+            if (!data) return interaction.editReply({ content: "Ticket no longer exists.", ephemeral: true });
+
+            const reason = interaction.fields.getTextInputValue('reason') || 'No reason provided';
+
+            await channel.send({ content: `Ticket closing - Reason: ${reason}` });
+
+            // Clean up
+            ticketData.delete(channel.id);
+            await saveTicketState();
+            await channel.delete().catch(console.error);
+
+            return interaction.editReply({ content: "Ticket closed.", ephemeral: true });
+        }
+
+        // Close by ID modal
+        if (interaction.isModalSubmit() && interaction.customId.startsWith('close_by_id_')) {
+            const ticketId = interaction.customId.replace('close_by_id_', '');
             const data = ticketData.get(ticketId);
 
-            if (!data) {
-                return interaction.editReply({ content: "❌ Ticket no longer exists.", flags: MessageFlags.Ephemeral });
-            }
+            if (!data) return interaction.reply({ content: "Ticket not found.", ephemeral: true });
 
-            const closeReason = interaction.fields.getTextInputValue('close_reason').trim() || 'No reason provided';
-
+            const reason = interaction.fields.getTextInputValue('reason') || 'No reason provided';
             const channel = interaction.guild.channels.cache.get(ticketId);
-            if (!channel) {
-                ticketData.delete(ticketId);
-                await saveTicketState();
-                return interaction.editReply({ content: "Channel already gone.", flags: MessageFlags.Ephemeral });
+
+            if (channel) {
+                await channel.send({ content: `Ticket closed by ${interaction.user} (admin) - Reason: ${reason}` });
+                await channel.delete().catch(console.error);
             }
-
-            const transcript = await saveTranscript(channel);
-            await logTicketClose(interaction, data, transcript, closeReason);
-
-            const openerMember = await interaction.guild.members.fetch(data.openerId).catch(() => null);
-            if (openerMember) await openerMember.roles.remove(TICKET_ROLE_ID).catch(() => {});
-
-            await channel.send({
-                embeds: [new EmbedBuilder()
-                    .setColor(0xff5555)
-                    .setDescription(`Ticket closed by ${interaction.user} (via /ticketclose).\n**Reason:** ${closeReason}`)]
-            });
 
             ticketData.delete(ticketId);
             await saveTicketState();
 
-            await interaction.editReply({ content: "Closing ticket...", flags: MessageFlags.Ephemeral });
-
-            setTimeout(() => channel.delete().catch(console.error), 6000);
-            return;
+            return interaction.reply({ content: "Ticket closed successfully.", ephemeral: true });
         }
-
-        // 9. TICKET PRIORITY CHANGE COMMAND
-        if (interaction.isChatInputCommand() && interaction.commandName === 'ticketpriority') {
-            const ticketId = interaction.options.getString('ticket_id', true);
-            const newPriority = interaction.options.getString('priority', true).toLowerCase();
-
-            if (!['low', 'medium', 'high', 'urgent'].includes(newPriority)) {
-                return interaction.reply({ content: "Invalid priority. Use: low, medium, high, urgent", flags: MessageFlags.Ephemeral });
-            }
-
-            const data = ticketData.get(ticketId);
-            if (!data || !interaction.guild.channels.cache.has(ticketId)) {
-                return interaction.reply({ content: "❌ Invalid or closed ticket ID.", flags: MessageFlags.Ephemeral });
-            }
-
-            const channel = interaction.guild.channels.cache.get(ticketId);
-            const isClaimer = data.claimedBy && data.claimedBy === interaction.user.id;
-            const isFoundership = interaction.member.roles.cache.has(FOUNDERSHIP_ROLE_ID);
-
-            if (!isClaimer && !isFoundership) {
-                return interaction.reply({ content: "Only the claimer or Foundership can change ticket priority.", flags: MessageFlags.Ephemeral });
-            }
-
-            // Update data
-            data.priority = newPriority;
-            ticketData.set(ticketId, data);
-            await saveTicketState();
-
-            // Try to rename channel
-            const oldName = channel.name;
-            const nameParts = oldName.split('-');
-            const baseName = nameParts.slice(0, -1).join('-');
-            const newName = `${baseName}-${newPriority}-${nameParts[nameParts.length - 1] || 'user'}`.slice(0, 100);
-
-            await channel.setName(newName).catch(() => {});
-
-            // Edit original ticket message
-            const messages = await channel.messages.fetch({ limit: 10 });
-            const ticketMessage = messages.find(m => m.embeds.length && m.embeds[0].title.includes('Ticket'));
-            if (ticketMessage) {
-                const updatedEmbed = EmbedBuilder.from(ticketMessage.embeds[0])
-                    .setTitle(`${PRIORITY_EMOJIS[newPriority]} ${data.department.toUpperCase()} Ticket – Priority: ${newPriority.toUpperCase()}`)
-                    .setColor(PRIORITY_COLORS[newPriority])
-                    .setDescription(
-                        ticketMessage.embeds[0].description.split('\n\n')[0] + '\n\n' +
-                        `**Priority updated to:** ${PRIORITY_EMOJIS[newPriority]} **${newPriority.toUpperCase()}** by ${interaction.user}`
-                    );
-
-                await ticketMessage.edit({ embeds: [updatedEmbed] }).catch(() => {});
-            }
-
-            // Confirmation in channel
-            await channel.send({
-                embeds: [new EmbedBuilder()
-                    .setColor(PRIORITY_COLORS[newPriority])
-                    .setDescription(`**Priority changed to ${newPriority.toUpperCase()}** ${PRIORITY_EMOJIS[newPriority]} by ${interaction.user}`)]
-            });
-
-            return interaction.reply({ content: `Priority updated to **${newPriority.toUpperCase()}** for ticket <#${ticketId}>`, flags: MessageFlags.Ephemeral });
-        }
-
-        // ... (keep all your other handlers: ticket creation with priority, buttons, claim, close modal, ticketperson add/remove, etc.) ...
 
     } catch (err) {
         console.error('Interaction error:', err);
-        if (!interaction.deferred && !interaction.replied) {
-            interaction.reply({ content: "An error occurred.", flags: MessageFlags.Ephemeral }).catch(() => {});
+        if (!interaction.replied && !interaction.deferred) {
+            interaction.reply({ content: "An error occurred.", ephemeral: true }).catch(() => {});
         }
     }
 });
 
-// ─── Events ───────────────────────────────────────────────
-client.on('channelDelete', async (channel) => {
-    if (ticketData.has(channel.id)) {
-        ticketData.delete(channel.id);
-        await saveTicketState();
-    }
-});
-
-client.once('clientReady', async () => {
-    await loadConfig();
-    await loadTicketState();
-    await pruneMissingTicketChannels();
+// ─── Ready Event ──────────────────────────────────────────
+client.once('ready', async () => {
+    console.log(`Logged in as ${client.user.tag}`);
 
     const rest = new REST({ version: '10' }).setToken(TOKEN);
 
     const commands = [
-        new SlashCommandBuilder().setName('dashboard').setDescription('Deploy main dashboard panel'),
-        new SlashCommandBuilder().setName('deptdashboard').setDescription('Deploy departments dashboard (Foundership only)'),
-        new SlashCommandBuilder().setName('ticketstats').setDescription('View ticket stats (admin)'),
+        new SlashCommandBuilder().setName('dashboard').setDescription('Deploy main dashboard'),
+        new SlashCommandBuilder().setName('deptdashboard').setDescription('Deploy departments dashboard'),
+        new SlashCommandBuilder().setName('ticketstats').setDescription('View ticket statistics'),
         new SlashCommandBuilder()
             .setName('ticketclose')
-            .setDescription('Close any ticket by its channel ID (Foundership only)')
-            .addStringOption(option =>
-                option.setName('ticket_id')
-                      .setDescription('The ID of the ticket channel to close')
-                      .setRequired(true)
-            ),
+            .setDescription('Close any ticket by ID (Foundership only)')
+            .addStringOption(o => o.setName('ticket_id').setDescription('Ticket channel ID').setRequired(true)),
         new SlashCommandBuilder()
             .setName('ticketpriority')
-            .setDescription('Change the priority of any ticket (claimer or Foundership only)')
-            .addStringOption(option =>
-                option.setName('ticket_id')
-                      .setDescription('The ID of the ticket channel')
-                      .setRequired(true)
-            )
-            .addStringOption(option =>
-                option.setName('priority')
-                      .setDescription('New priority level')
-                      .setRequired(true)
-                      .addChoices(
-                          { name: 'Low', value: 'low' },
-                          { name: 'Medium', value: 'medium' },
-                          { name: 'High', value: 'high' },
-                          { name: 'Urgent', value: 'urgent' }
-                      )
-            ),
-        // ... your other commands (ownerpanel, say, embedbuilder, setup, ticketpersonadd, ticketpersonremove) ...
+            .setDescription('Change ticket priority')
+            .addStringOption(o => o.setName('ticket_id').setDescription('Ticket ID').setRequired(true))
+            .addStringOption(o => o.setName('priority').setDescription('New priority').setRequired(true)
+                .addChoices(
+                    { name: 'Low', value: 'low' },
+                    { name: 'Medium', value: 'medium' },
+                    { name: 'High', value: 'high' },
+                    { name: 'Urgent', value: 'urgent' }
+                )),
+        new SlashCommandBuilder()
+            .setName('ticketpersonadd')
+            .setDescription('Add user to current ticket')
+            .addUserOption(o => o.setName('user').setDescription('User to add').setRequired(true)),
+        new SlashCommandBuilder()
+            .setName('ticketpersonremove')
+            .setDescription('Remove user from current ticket')
+            .addUserOption(o => o.setName('user').setDescription('User to remove').setRequired(true)),
+        new SlashCommandBuilder().setName('setup').setDescription('Configure bot settings'),
     ];
 
     try {
-        const guildId = process.env.GUILD_ID;
-        if (!guildId) {
-            console.log("⚠️ GUILD_ID not set in .env — skipping command registration");
-        } else {
-            await rest.put(
-                Routes.applicationGuildCommands(client.user.id, guildId),
-                { body: commands }
-            );
-            console.log(`✅ Registered ${commands.length} guild-specific commands in ${guildId}`);
-        }
+        await rest.put(
+            Routes.applicationGuildCommands(client.user.id, '1472277307002589216'),
+            { body: commands }
+        );
+        console.log('Slash commands registered successfully to guild 1472277307002589216');
     } catch (err) {
-        console.error('Command registration failed:', err);
+        console.error('Failed to register commands:', err);
     }
-
-    console.log(`✅ ${client.user.tag} online`);
 });
 
-if (!TOKEN) throw new Error('Missing TOKEN');
-
 client.login(TOKEN);
-
-app.listen(PORT, () => console.log(`Health check on port ${PORT}`));
+app.listen(PORT, () => console.log(`Health check running on port ${PORT}`));
