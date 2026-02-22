@@ -35,14 +35,12 @@ const client = new Client({
 // ─── Configuration ────────────────────────────────────────
 const CONFIG_PATH = path.join(__dirname, 'config.json');
 const TICKET_STATE_PATH = path.join(__dirname, 'ticket-state.json');
-
 const DEFAULT_CONFIG = {
     logChannel: null,
     staffRole: null,
     iaRole: null,
     mgmtRole: null,
 };
-
 let config = { ...DEFAULT_CONFIG };
 
 async function loadConfig() {
@@ -64,16 +62,11 @@ async function saveConfig() {
 
 // ─── Constants ────────────────────────────────────────────
 const BOT_OWNER_ID = '1205738144323080214';
-
-// Foundership role: ONLY this role can use slash commands
 const FOUNDERSHIP_ROLE_ID = '1472278188469125355';
-
-// Blocked roles (cannot see tickets)
 const BLOCKED_ROLE_IDS = [
     '1472280032574570616',
     '1472280229794943282'
 ];
-
 const BOT_COLOR = 0x2b6cb0;
 const SUPPORT_BANNER = "https://image2url.com/r2/default/images/1771467061096-fc09db59-fd9e-461f-ba30-c8b1ee42ff1f.jpg";
 const DASHBOARD_ICON = "https://image2url.com/r2/default/images/1771563774401-5dd69719-a2a9-42d7-a76e-c9028c62fe2f.jpg";
@@ -99,24 +92,20 @@ app.get('/health', (_, res) => {
 function isBotOwner(interaction) {
     return interaction.user.id === BOT_OWNER_ID;
 }
-
 function isFoundership(member) {
     return member.roles.cache.has(FOUNDERSHIP_ROLE_ID);
 }
-
 function getPingRole(department) {
     if (department === 'internal-affairs') return config.iaRole;
     if (department === 'management' || department === 'partnership') return config.mgmtRole;
     return config.staffRole;
 }
-
 function isSupportStaff(member) {
     if (!member) return false;
     const supportRoles = [config.staffRole, config.iaRole, config.mgmtRole].filter(Boolean);
     return supportRoles.some(roleId => member.roles.cache.has(roleId)) ||
            member.permissions.has(PermissionsBitField.Flags.Administrator);
 }
-
 function findExistingTicket(guild, openerId) {
     for (const [channelId, data] of ticketData.entries()) {
         if (data.openerId !== openerId) continue;
@@ -129,21 +118,18 @@ function findExistingTicket(guild, openerId) {
     }
     return null;
 }
-
 function formatSetupValue(value, type = 'id') {
     if (!value) return 'Not set';
     if (type === 'channel') return `<#${value}>`;
     if (type === 'role') return `<@&${value}>`;
     return value;
 }
-
 async function loadTicketState() {
     try {
         const raw = await fs.readFile(TICKET_STATE_PATH, 'utf-8');
         const parsed = JSON.parse(raw);
         ticketData.clear();
         userLastTicketOpen.clear();
-
         for (const [channelId, data] of Object.entries(parsed.openTickets || {})) {
             if (data?.openerId && data?.startTime) ticketData.set(channelId, data);
         }
@@ -154,7 +140,6 @@ async function loadTicketState() {
         if (err.code !== 'ENOENT') console.error('Ticket state load error:', err);
     }
 }
-
 async function saveTicketState() {
     try {
         const payload = {
@@ -166,7 +151,6 @@ async function saveTicketState() {
         console.error('Ticket state save error:', err);
     }
 }
-
 async function pruneMissingTicketChannels() {
     let mutated = false;
     for (const channelId of ticketData.keys()) {
@@ -177,22 +161,18 @@ async function pruneMissingTicketChannels() {
     }
     if (mutated) await saveTicketState();
 }
-
 async function saveTranscript(channel) {
     try {
         const allMessages = [];
         let before;
-
         while (true) {
             const batch = await channel.messages.fetch({ limit: 100, before }).catch(() => new Map());
             if (batch.size === 0) break;
             allMessages.push(...batch.values());
             before = batch.last()?.id;
         }
-
         const sorted = allMessages.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
         const limited = sorted.slice(-5000);
-
         const lines = limited.map(m => {
             const time = m.createdAt.toISOString().slice(0, 19).replace('T', ' ');
             const author = `${m.author.tag} (${m.author.id})`;
@@ -201,30 +181,24 @@ async function saveTranscript(channel) {
             if (m.attachments.size) line += ` | Attachments: ${[...m.attachments.values()].map(a => a.url).join(', ')}`;
             return line;
         });
-
         const safeName = channel.name.replace(/[^a-z0-9-]/gi, '-').toLowerCase();
         const filename = `transcript-${safeName}-${Date.now()}.txt`;
         const filepath = path.join(__dirname, 'transcripts', filename);
-
         await fs.mkdir(path.join(__dirname, 'transcripts'), { recursive: true });
         await fs.writeFile(filepath, lines.join('\n') + '\n', 'utf-8');
-
         return { filename, filepath };
     } catch (err) {
         console.error('Transcript error:', err);
         return null;
     }
 }
-
 async function logTicketClose(interaction, data, transcriptInfo, closeReason = 'No reason provided') {
     if (!config.logChannel) return;
     const logChannel = interaction.guild.channels.cache.get(config.logChannel);
     if (!logChannel) return;
-
     const opener = await interaction.guild.members.fetch(data.openerId).catch(() => null);
     const claimedBy = data.claimedBy ? `<@${data.claimedBy}>` : 'Not claimed';
     const closer = interaction.user;
-
     const embed = new EmbedBuilder()
         .setTitle(`Ticket Closed: ${interaction.channel.name}`)
         .setColor(0xff5555)
@@ -237,9 +211,7 @@ async function logTicketClose(interaction, data, transcriptInfo, closeReason = '
             { name: 'Created', value: `<t:${Math.floor(data.startTime / 1000)}:f>`, inline: true },
         )
         .setTimestamp();
-
     const files = transcriptInfo ? [{ attachment: transcriptInfo.filepath, name: transcriptInfo.filename }] : [];
-
     await logChannel.send({ embeds: [embed], files }).catch(console.error);
 }
 
@@ -272,7 +244,6 @@ client.on('interactionCreate', async (interaction) => {
                 .setColor(BOT_COLOR)
                 .setImage(DASHBOARD_ICON)
                 .setTimestamp();
-
             const menu = new StringSelectMenuBuilder()
                 .setCustomId('asrp_dashboard')
                 .setPlaceholder('Select an option...')
@@ -281,11 +252,8 @@ client.on('interactionCreate', async (interaction) => {
                     { label: 'In-Game Rules', value: 'ig_rules', description: 'ER:LC Penal Code', emoji: '🎮' },
                     { label: 'Discord Rules', value: 'dc_rules', description: 'Community Guidelines', emoji: '📜' },
                 ]);
-
             const menuRow = new ActionRowBuilder().addComponents(menu);
-
             await interaction.channel.send({ embeds: [embed], components: [menuRow] });
-
             return interaction.reply({ content: "✅ Dashboard deployed.", flags: MessageFlags.Ephemeral });
         }
 
@@ -308,7 +276,6 @@ client.on('interactionCreate', async (interaction) => {
                 )
                 .setFooter({ text: 'Alaska State Roleplay • Departments System' })
                 .setTimestamp();
-
             const departmentDropdown = new StringSelectMenuBuilder()
                 .setCustomId('select_department')
                 .setPlaceholder('Select a department...')
@@ -319,20 +286,15 @@ client.on('interactionCreate', async (interaction) => {
                     { label: 'Alaska Fire Department', value: 'afd', description: 'Currently in development', emoji: '🚒', disabled: true },
                     { label: 'FBI', value: 'fbi', description: 'Join FBI server', emoji: '🕵️‍♂️' }
                 );
-
             const dashboardRow = new ActionRowBuilder().addComponents(departmentDropdown);
-
             await interaction.channel.send({ embeds: [dashboardEmbed], components: [dashboardRow] });
-
             return interaction.reply({ content: "✅ Departments dashboard deployed.", flags: MessageFlags.Ephemeral });
         }
 
-        // 3. DEPARTMENT DROPDOWN HANDLER (with real links)
+        // 3. DEPARTMENT DROPDOWN HANDLER
         if (interaction.isStringSelectMenu() && interaction.customId === 'select_department') {
             const value = interaction.values[0];
-
             let replyText = 'Unknown department selected.';
-
             switch (value) {
                 case 'ast':
                     replyText = '✅ **Alaska State Troopers** is **OPEN**!\nJoin here: https://discord.gg/WhP5Xk85Yw';
@@ -350,7 +312,6 @@ client.on('interactionCreate', async (interaction) => {
                     replyText = '✅ **FBI** is **OPEN**!\nJoin here: https://discord.gg/fQC227yJZT';
                     break;
             }
-
             return interaction.reply({ content: replyText, flags: MessageFlags.Ephemeral });
         }
 
@@ -358,20 +319,16 @@ client.on('interactionCreate', async (interaction) => {
         if (interaction.isChatInputCommand() && interaction.commandName === 'ticketstats') {
             try {
                 const openTickets = Array.from(ticketData.values());
-
                 const byDepartment = openTickets.reduce((acc, ticket) => {
                     const dept = ticket.department || 'unknown';
                     acc[dept] = (acc[dept] || 0) + 1;
                     return acc;
                 }, {});
-
                 const deptLines = Object.entries(byDepartment)
                     .map(([dept, count]) => `• ${dept}: **${count}**`)
                     .join('\n') || '• none';
-
                 const claimedCount = openTickets.filter(t => t.claimedBy).length;
                 const unclaimedCount = openTickets.length - claimedCount;
-
                 const embed = new EmbedBuilder()
                     .setColor(BOT_COLOR)
                     .setTitle('📊 Live Ticket Stats')
@@ -383,15 +340,49 @@ client.on('interactionCreate', async (interaction) => {
                         { name: 'By Department', value: deptLines, inline: false }
                     )
                     .setTimestamp();
-
                 return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
             } catch (statsErr) {
                 console.error('Ticketstats command failed:', statsErr);
-                return interaction.reply({ 
-                    content: "❌ Failed to load ticket stats. Check bot logs for details.", 
-                    flags: MessageFlags.Ephemeral 
+                return interaction.reply({
+                    content: "❌ Failed to load ticket stats. Check bot logs for details.",
+                    flags: MessageFlags.Ephemeral
                 });
             }
+        }
+
+        // NEW: VEHICLE LIVERY DASHBOARD COMMAND
+        if (interaction.isChatInputCommand() && interaction.commandName === 'vehicle-dashboard') {
+            const vehicles = [
+                { name: "BKM Munich", year: 2020, type: "🚓", livery: "FBI Police", status: "ACTIVE" },
+                { name: "Bullhorn Prancer Pursuit", year: 2011, type: "🚓", livery: "State Trooper", status: "ACTIVE" },
+                { name: "Falcon Interceptor Sedan", year: 2017, type: "🚓", livery: "FBI, Secret Service", status: "ACTIVE" },
+                { name: "Stuttgart Prisoner Transport", year: 2020, type: "🚔", livery: "FBI", status: "ACTIVE" },
+                { name: "SWAT Armored Truck", year: 2011, type: "🛡️", livery: "FBI, HSI, SWAT Team", status: "ACTIVE" },
+                // Add more vehicles here as needed
+            ];
+
+            const chunk = (arr, size) => Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
+
+            const embed = new EmbedBuilder()
+                .setTitle("ASRP | Vehicle Livery Dashboard")
+                .setDescription("All vehicles are currently **active** and deployed.")
+                .setColor(0x1E90FF)
+                .addFields(
+                    chunk(vehicles, 3).map(row => ({
+                        name: "\u200b",
+                        value: row.map(v =>
+                            `**${v.type} ${v.name} (${v.year})**\n` +
+                            `Livery: ${v.livery}\n` +
+                            `Status: 🟢 ${v.status}`
+                        ).join("\n\n─────────────────\n") || "No vehicles in this group",
+                        inline: false
+                    }))
+                )
+                .setFooter({ text: "Last Updated: February 22, 2026" })
+                .setTimestamp();
+
+            await interaction.channel.send({ embeds: [embed] });
+            return interaction.reply({ content: "✅ Vehicle Livery Dashboard deployed.", flags: MessageFlags.Ephemeral });
         }
 
         // 5. OWNER PANEL
@@ -400,28 +391,23 @@ client.on('interactionCreate', async (interaction) => {
             if (code !== OWNER_PANEL_CODE) {
                 return interaction.reply({ content: "🚫 Invalid owner code.", flags: MessageFlags.Ephemeral });
             }
-
             const messageId = interaction.options.getString('message_id', true);
             const editType = interaction.options.getString('edit_type', true);
             const newContent = interaction.options.getString('new_content', true);
             const targetChannel = interaction.options.getChannel('channel') || interaction.channel;
-
             if (targetChannel?.type !== ChannelType.GuildText) {
                 return interaction.reply({ content: "⚠️ Must be a text channel.", flags: MessageFlags.Ephemeral });
             }
-
             const message = await targetChannel.messages.fetch(messageId).catch(() => null);
             if (!message) return interaction.reply({ content: "⚠️ Message not found.", flags: MessageFlags.Ephemeral });
             if (message.author.id !== client.user.id) {
                 return interaction.reply({ content: "⚠️ Can only edit bot messages.", flags: MessageFlags.Ephemeral });
             }
-
             try {
                 if (editType === 'text') {
                     await message.edit({ content: newContent, embeds: [] });
                     return interaction.reply({ content: `✅ Text updated → ${message.url}`, flags: MessageFlags.Ephemeral });
                 }
-
                 if (editType === 'embed') {
                     let embedData;
                     try {
@@ -446,11 +432,9 @@ client.on('interactionCreate', async (interaction) => {
         if (interaction.isChatInputCommand() && interaction.commandName === 'say') {
             const message = interaction.options.getString('message', true);
             const targetChannel = interaction.options.getChannel('channel') || interaction.channel;
-
             if (targetChannel?.type !== ChannelType.GuildText) {
                 return interaction.reply({ content: "⚠️ Must be a text channel.", flags: MessageFlags.Ephemeral });
             }
-
             await targetChannel.send({ content: message });
             return interaction.reply({ content: `✅ Sent in ${targetChannel}.`, flags: MessageFlags.Ephemeral });
         }
@@ -458,14 +442,11 @@ client.on('interactionCreate', async (interaction) => {
         // 7. EMBED BUILDER
         if (interaction.isChatInputCommand() && interaction.commandName === 'embedbuilder') {
             await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
             const jsonInput = interaction.options.getString('json', true);
             const targetChannel = interaction.options.getChannel('channel') || interaction.channel;
-
             if (targetChannel.type !== ChannelType.GuildText) {
                 return interaction.editReply({ content: "⚠️ Target must be a text channel.", flags: MessageFlags.Ephemeral });
             }
-
             let embedData;
             try {
                 embedData = JSON.parse(jsonInput);
@@ -474,20 +455,19 @@ client.on('interactionCreate', async (interaction) => {
                 return interaction.editReply({
                     content: "❌ Invalid JSON format.\n\n**Example valid embed JSON:**\n```json\n" +
                              "{\n" +
-                             "  \"title\": \"Test Title\",\n" +
-                             "  \"description\": \"This is the main text\",\n" +
-                             "  \"color\": 3447003,\n" +
-                             "  \"fields\": [\n" +
-                             "    { \"name\": \"Field 1\", \"value\": \"Value here\", \"inline\": true }\n" +
-                             "  ],\n" +
-                             "  \"footer\": { \"text\": \"Footer text\" },\n" +
-                             "  \"thumbnail\": { \"url\": \"https://example.com/thumb.png\" },\n" +
-                             "  \"image\": { \"url\": \"https://example.com/image.png\" }\n" +
+                             " \"title\": \"Test Title\",\n" +
+                             " \"description\": \"This is the main text\",\n" +
+                             " \"color\": 3447003,\n" +
+                             " \"fields\": [\n" +
+                             " { \"name\": \"Field 1\", \"value\": \"Value here\", \"inline\": true }\n" +
+                             " ],\n" +
+                             " \"footer\": { \"text\": \"Footer text\" },\n" +
+                             " \"thumbnail\": { \"url\": \"https://example.com/thumb.png\" },\n" +
+                             " \"image\": { \"url\": \"https://example.com/image.png\" }\n" +
                              "}\n```",
                     flags: MessageFlags.Ephemeral
                 });
             }
-
             try {
                 const embed = new EmbedBuilder(embedData);
                 await targetChannel.send({ embeds: [embed] });
@@ -507,25 +487,21 @@ client.on('interactionCreate', async (interaction) => {
             const staff = interaction.options.getRole('staff');
             const ia = interaction.options.getRole('ia_role');
             const mgmt = interaction.options.getRole('management_role');
-
             if (logs) config.logChannel = logs.id;
             if (staff) config.staffRole = staff.id;
             if (ia) config.iaRole = ia.id;
             if (mgmt) config.mgmtRole = mgmt.id;
-
             await saveConfig();
-
             const setupEmbed = new EmbedBuilder()
                 .setColor(BOT_COLOR)
                 .setTitle('Setup Updated')
                 .addFields(
                     { name: 'Logs Channel', value: formatSetupValue(config.logChannel, 'channel'), inline: true },
-                    { name: 'Staff Role',   value: formatSetupValue(config.staffRole, 'role'), inline: true },
-                    { name: 'IA Role',      value: formatSetupValue(config.iaRole, 'role'), inline: true },
+                    { name: 'Staff Role', value: formatSetupValue(config.staffRole, 'role'), inline: true },
+                    { name: 'IA Role', value: formatSetupValue(config.iaRole, 'role'), inline: true },
                     { name: 'Management Role', value: formatSetupValue(config.mgmtRole, 'role'), inline: true },
                 )
                 .setFooter({ text: `Ticket cooldown: ${Math.round(TICKET_COOLDOWN_MS / 1000)}s` });
-
             return interaction.reply({ embeds: [setupEmbed], flags: MessageFlags.Ephemeral });
         }
 
@@ -533,19 +509,14 @@ client.on('interactionCreate', async (interaction) => {
         if (interaction.isChatInputCommand() && interaction.commandName === 'ticketpersonadd') {
             const channel = interaction.channel;
             const data = ticketData.get(channel.id);
-
             if (!data) return interaction.reply({ content: "This is not a ticket channel.", flags: MessageFlags.Ephemeral });
-
             const member = interaction.member;
             const isClaimer = data.claimedBy && data.claimedBy === interaction.user.id;
             const isFoundership = member.roles.cache.has(FOUNDERSHIP_ROLE_ID);
-
             if (!isClaimer && !isFoundership) {
                 return interaction.reply({ content: "Only the claimer or Foundership can add users to this ticket.", flags: MessageFlags.Ephemeral });
             }
-
             const user = interaction.options.getUser('user', true);
-
             try {
                 await channel.permissionOverwrites.edit(user.id, {
                     ViewChannel: true,
@@ -563,19 +534,14 @@ client.on('interactionCreate', async (interaction) => {
         if (interaction.isChatInputCommand() && interaction.commandName === 'ticketpersonremove') {
             const channel = interaction.channel;
             const data = ticketData.get(channel.id);
-
             if (!data) return interaction.reply({ content: "This is not a ticket channel.", flags: MessageFlags.Ephemeral });
-
             const member = interaction.member;
             const isClaimer = data.claimedBy && data.claimedBy === interaction.user.id;
             const isFoundership = member.roles.cache.has(FOUNDERSHIP_ROLE_ID);
-
             if (!isClaimer && !isFoundership) {
                 return interaction.reply({ content: "Only the claimer or Foundership can remove users from this ticket.", flags: MessageFlags.Ephemeral });
             }
-
             const user = interaction.options.getUser('user', true);
-
             try {
                 await channel.permissionOverwrites.delete(user.id);
                 return interaction.reply({ content: `Removed ${user} from this ticket.`, flags: MessageFlags.Ephemeral });
@@ -628,45 +594,35 @@ client.on('interactionCreate', async (interaction) => {
                           "Use #appeals or open a ticket if you believe a punishment was unfair."
                 }
             };
-
             const res = responses[interaction.values[0]];
             if (!res) return interaction.reply({ content: "Invalid option.", flags: MessageFlags.Ephemeral });
-
             const embed = new EmbedBuilder()
                 .setTitle(res.title)
                 .setDescription(res.desc)
                 .setColor(BOT_COLOR)
                 .setThumbnail(DASHBOARD_ICON)
                 .setFooter({ text: "Alaska State RolePlay • Follow the rules!" });
-
             return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
         }
 
         // 12. TICKET CREATION
         if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_type') {
             await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
             if (!config.staffRole || !config.iaRole || !config.mgmtRole) {
                 return interaction.editReply({ content: "⚠️ Run `/setup` first to configure roles.", flags: MessageFlags.Ephemeral });
             }
-
             const dept = interaction.values[0];
             const pingRoleId = getPingRole(dept);
             if (!pingRoleId) return interaction.editReply({ content: "⚠️ Department role not set.", flags: MessageFlags.Ephemeral });
-
             const existing = findExistingTicket(interaction.guild, interaction.user.id);
             if (existing) return interaction.editReply({ content: `⚠️ You already have a ticket: <#${existing}>`, flags: MessageFlags.Ephemeral });
-
             const lastOpen = userLastTicketOpen.get(interaction.user.id) || 0;
             const cooldownLeft = TICKET_COOLDOWN_MS - (Date.now() - lastOpen);
             if (cooldownLeft > 0) {
                 return interaction.editReply({ content: `⏳ Wait ${Math.ceil(cooldownLeft / 1000)}s.`, flags: MessageFlags.Ephemeral });
             }
-
             await interaction.member.roles.add(TICKET_ROLE_ID).catch(() => {});
-
             const safeUsername = interaction.user.username.toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 40) || interaction.user.id;
-
             let channel;
             try {
                 const overwrites = [
@@ -675,11 +631,9 @@ client.on('interactionCreate', async (interaction) => {
                     { id: pingRoleId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] },
                     { id: FOUNDERSHIP_ROLE_ID, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] }
                 ];
-
                 BLOCKED_ROLE_IDS.forEach(roleId => {
                     overwrites.push({ id: roleId, deny: [PermissionsBitField.Flags.ViewChannel] });
                 });
-
                 channel = await interaction.guild.channels.create({
                     name: `ticket-${dept}-${safeUsername}`,
                     type: ChannelType.GuildText,
@@ -689,22 +643,18 @@ client.on('interactionCreate', async (interaction) => {
                 console.error('Channel creation failed:', err);
                 return interaction.editReply({ content: "❌ Failed to create ticket channel.", flags: MessageFlags.Ephemeral });
             }
-
             ticketData.set(channel.id, {
                 openerId: interaction.user.id,
                 startTime: Date.now(),
                 claimedBy: null,
                 department: dept,
             });
-
             userLastTicketOpen.set(interaction.user.id, Date.now());
             await saveTicketState();
-
             const buttons = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('claim_ticket').setLabel('Claim').setStyle(ButtonStyle.Success),
                 new ButtonBuilder().setCustomId('close_ticket').setLabel('Close').setStyle(ButtonStyle.Danger),
             );
-
             await channel.send({
                 content: `${interaction.user} | <@&${pingRoleId}>`,
                 embeds: [
@@ -716,7 +666,6 @@ client.on('interactionCreate', async (interaction) => {
                 ],
                 components: [buttons],
             });
-
             return interaction.editReply({ content: `✅ Ticket created → ${channel}`, flags: MessageFlags.Ephemeral });
         }
 
@@ -725,46 +674,35 @@ client.on('interactionCreate', async (interaction) => {
             const channel = interaction.channel;
             const data = ticketData.get(channel.id);
             if (!data) return interaction.reply({ content: "Ticket no longer exists.", flags: MessageFlags.Ephemeral });
-
             const member = interaction.member;
-
             const canManage = isSupportStaff(member) ||
                               member.roles.cache.has(FOUNDERSHIP_ROLE_ID) ||
                               (data.claimedBy && data.claimedBy === interaction.user.id);
-
             if (!canManage) {
                 return interaction.reply({ content: "🚫 You don't have permission to manage this ticket.", flags: MessageFlags.Ephemeral });
             }
-
             await interaction.deferUpdate();
-
             if (interaction.customId === 'claim_ticket') {
                 if (data.claimedBy) {
                     return interaction.followUp({ content: `Already claimed by <@${data.claimedBy}>.`, flags: MessageFlags.Ephemeral });
                 }
-
                 ticketData.set(channel.id, { ...data, claimedBy: interaction.user.id });
                 await saveTicketState();
-
                 const overwrites = [
                     { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
                     { id: data.openerId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.ReadMessageHistory] },
                     { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] },
                     { id: FOUNDERSHIP_ROLE_ID, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] }
                 ];
-
                 BLOCKED_ROLE_IDS.forEach(roleId => {
                     overwrites.push({ id: roleId, deny: [PermissionsBitField.Flags.ViewChannel] });
                 });
-
                 await channel.permissionOverwrites.set(overwrites);
-
                 await interaction.message.edit({
                     components: [new ActionRowBuilder().addComponents(
                         new ButtonBuilder().setCustomId('close_ticket').setLabel('Close').setStyle(ButtonStyle.Danger)
                     )]
                 });
-
                 await channel.send({
                     embeds: [new EmbedBuilder()
                         .setColor(0x43b581)
@@ -772,28 +710,22 @@ client.on('interactionCreate', async (interaction) => {
                 });
                 return;
             }
-
             if (interaction.customId === 'close_ticket') {
                 const canClose = (data.claimedBy && data.claimedBy === interaction.user.id) ||
                                  member.roles.cache.has(FOUNDERSHIP_ROLE_ID);
-
                 if (!canClose) {
                     return interaction.followUp({ content: "🚫 Only the claimer or Foundership can close this ticket.", flags: MessageFlags.Ephemeral });
                 }
-
                 const modal = new ModalBuilder()
                     .setCustomId('close_ticket_modal')
                     .setTitle('Close Ticket - Reason Required');
-
                 const reasonInput = new TextInputBuilder()
                     .setCustomId('close_reason')
                     .setLabel('Why is this ticket being closed?')
                     .setStyle(TextInputStyle.Paragraph)
                     .setRequired(true)
                     .setPlaceholder('Enter reason here... (will be logged)');
-
                 modal.addComponents(new ActionRowBuilder().addComponents(reasonInput));
-
                 await interaction.showModal(modal);
                 return;
             }
@@ -802,96 +734,31 @@ client.on('interactionCreate', async (interaction) => {
         // Handle modal submission for close reason
         if (interaction.isModalSubmit() && interaction.customId === 'close_ticket_modal') {
             await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
             const channel = interaction.channel;
             const data = ticketData.get(channel.id);
             if (!data) return interaction.editReply({ content: "Ticket no longer exists.", flags: MessageFlags.Ephemeral });
-
             const member = interaction.member;
             const canClose = (data.claimedBy && data.claimedBy === interaction.user.id) ||
                              member.roles.cache.has(FOUNDERSHIP_ROLE_ID);
-
             if (!canClose) {
                 return interaction.editReply({ content: "🚫 Permission lost. You can no longer close this ticket.", flags: MessageFlags.Ephemeral });
             }
-
             const closeReason = interaction.fields.getTextInputValue('close_reason').trim() || 'No reason provided';
-
             const transcript = await saveTranscript(channel);
             await logTicketClose(interaction, data, transcript, closeReason);
-
             const openerMember = await interaction.guild.members.fetch(data.openerId).catch(() => null);
             if (openerMember) await openerMember.roles.remove(TICKET_ROLE_ID).catch(() => {});
-
             await channel.send({
                 embeds: [new EmbedBuilder()
                     .setColor(0xff5555)
                     .setDescription(`Ticket being closed by ${interaction.user}.\n**Reason:** ${closeReason}`)]
             });
-
             ticketData.delete(channel.id);
             await saveTicketState();
-
             await interaction.editReply({ content: "Closing ticket...", flags: MessageFlags.Ephemeral });
-
             setTimeout(() => channel.delete().catch(console.error), 6000);
         }
 
-        // /ticketpersonadd (only claimer or Foundership)
-        if (interaction.isChatInputCommand() && interaction.commandName === 'ticketpersonadd') {
-            const channel = interaction.channel;
-            const data = ticketData.get(channel.id);
-
-            if (!data) return interaction.reply({ content: "This is not a ticket channel.", flags: MessageFlags.Ephemeral });
-
-            const member = interaction.member;
-            const isClaimer = data.claimedBy && data.claimedBy === interaction.user.id;
-            const isFoundership = member.roles.cache.has(FOUNDERSHIP_ROLE_ID);
-
-            if (!isClaimer && !isFoundership) {
-                return interaction.reply({ content: "Only the claimer or Foundership can add users to this ticket.", flags: MessageFlags.Ephemeral });
-            }
-
-            const user = interaction.options.getUser('user', true);
-
-            try {
-                await channel.permissionOverwrites.edit(user.id, {
-                    ViewChannel: true,
-                    SendMessages: true,
-                    ReadMessageHistory: true
-                });
-                return interaction.reply({ content: `Added ${user} to this ticket.`, flags: MessageFlags.Ephemeral });
-            } catch (err) {
-                console.error('Failed to add user:', err);
-                return interaction.reply({ content: "Failed to add user. Check bot permissions.", flags: MessageFlags.Ephemeral });
-            }
-        }
-
-        // /ticketpersonremove (only claimer or Foundership)
-        if (interaction.isChatInputCommand() && interaction.commandName === 'ticketpersonremove') {
-            const channel = interaction.channel;
-            const data = ticketData.get(channel.id);
-
-            if (!data) return interaction.reply({ content: "This is not a ticket channel.", flags: MessageFlags.Ephemeral });
-
-            const member = interaction.member;
-            const isClaimer = data.claimedBy && data.claimedBy === interaction.user.id;
-            const isFoundership = member.roles.cache.has(FOUNDERSHIP_ROLE_ID);
-
-            if (!isClaimer && !isFoundership) {
-                return interaction.reply({ content: "Only the claimer or Foundership can remove users from this ticket.", flags: MessageFlags.Ephemeral });
-            }
-
-            const user = interaction.options.getUser('user', true);
-
-            try {
-                await channel.permissionOverwrites.delete(user.id);
-                return interaction.reply({ content: `Removed ${user} from this ticket.`, flags: MessageFlags.Ephemeral });
-            } catch (err) {
-                console.error('Failed to remove user:', err);
-                return interaction.reply({ content: "Failed to remove user. Check bot permissions.", flags: MessageFlags.Ephemeral });
-            }
-        }
     } catch (err) {
         console.error('Interaction error:', err);
         if (!interaction.deferred && !interaction.replied) {
@@ -912,13 +779,12 @@ client.once('clientReady', async () => {
     await loadConfig();
     await loadTicketState();
     await pruneMissingTicketChannels();
-
     const rest = new REST({ version: '10' }).setToken(TOKEN);
-
     const commands = [
         new SlashCommandBuilder().setName('dashboard').setDescription('Deploy main dashboard panel'),
         new SlashCommandBuilder().setName('deptdashboard').setDescription('Deploy departments dashboard (Foundership only)'),
         new SlashCommandBuilder().setName('ticketstats').setDescription('View ticket stats (admin)'),
+        new SlashCommandBuilder().setName('vehicle-dashboard').setDescription('Deploy the ASRP Vehicle Livery Dashboard'),
         new SlashCommandBuilder()
             .setName('ownerpanel')
             .setDescription('Edit bot messages (owner)')
@@ -957,7 +823,6 @@ client.once('clientReady', async () => {
             .setDescription('Remove a user from this ticket (claimer or Foundership only)')
             .addUserOption(o => o.setName('user').setDescription('User to remove').setRequired(true)),
     ];
-
     try {
         const guildId = process.env.GUILD_ID;
         if (!guildId) {
@@ -972,12 +837,9 @@ client.once('clientReady', async () => {
     } catch (err) {
         console.error('Command registration failed:', err);
     }
-
     console.log(`✅ ${client.user.tag} online`);
 });
 
 if (!TOKEN) throw new Error('Missing TOKEN');
-
 client.login(TOKEN);
-
 app.listen(PORT, () => console.log(`Health check on port ${PORT}`));
