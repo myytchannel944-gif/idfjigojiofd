@@ -245,7 +245,12 @@ client.on('interactionCreate', async (interaction) => {
                 const embed = new EmbedBuilder()
                     .setAuthor({ name: "ALASKA STATE ROLEPLAY • OFFICIAL DIRECTORY", iconURL: DASHBOARD_ICON })
                     .setTitle("Dashboard")
-                    .setDescription("Welcome to the best ER:LC roleplay community...\nUse the menu below.")
+                    .setDescription(
+                        "**Welcome to Alaska State RolePlay!**\n\n" +
+                        "Welcome to the best ER:LC roleplay community. Here you will find all of the information needed to get started.\n\n" +
+                        "Before participating, make sure you've read and understand our rules and application process.\n" +
+                        "Use the menu below to navigate."
+                    )
                     .setColor(BOT_COLOR)
                     .setImage(DASHBOARD_ICON)
                     .setTimestamp();
@@ -254,42 +259,54 @@ client.on('interactionCreate', async (interaction) => {
                     .setCustomId('asrp_dashboard')
                     .setPlaceholder('Select an option...')
                     .addOptions([
-                        { label: 'Staff Applications', value: 'staff_apps', emoji: '📝' },
-                        { label: 'In-Game Rules', value: 'ig_rules', emoji: '🎮' },
-                        { label: 'Discord Rules', value: 'dc_rules', emoji: '📜' },
-                        { label: 'Vehicle Livery Dashboard', value: 'vehicle_livery', emoji: '🚓' },
+                        { label: 'Staff Applications', value: 'staff_apps', description: 'Join the ASRP team', emoji: '📝' },
+                        { label: 'In-Game Rules', value: 'ig_rules', description: 'ER:LC Penal Code', emoji: '🎮' },
+                        { label: 'Discord Rules', value: 'dc_rules', description: 'Community Guidelines', emoji: '📜' },
+                        { label: 'Vehicle Livery Dashboard', value: 'vehicle_livery', description: 'View current ASRP fleet status', emoji: '🚓' },
                     ]);
 
-                await interaction.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)] });
+                const menuRow = new ActionRowBuilder().addComponents(menu);
+
+                await interaction.channel.send({ embeds: [embed], components: [menuRow] });
+
                 return interaction.reply({ content: "✅ Dashboard deployed.", ephemeral: true });
             }
 
             // /deptdashboard
             if (interaction.commandName === 'deptdashboard') {
-                const embed = new EmbedBuilder()
+                const dashboardEmbed = new EmbedBuilder()
                     .setTitle('🏔️ Alaska State Roleplay')
-                    .setDescription('Select a department from the dropdown...')
+                    .setDescription(
+                        '━━━━━━━━━━━━━━━━━━\n**Departments Dashboard**\n━━━━━━━━━━━━━━━━━━\n\n' +
+                        'Select a department from the dropdown to get your invite and instructions.\n\n' +
+                        '🚨 Professionalism is required\n📋 Follow all server rules\n⚠️ Abuse of roles will result in removal'
+                    )
                     .setColor(5793266)
                     .addFields(
-                        { name: '🚓 Alaska State Troopers', value: '🟢 **OPEN**' },
-                        { name: '🚧 Alaska Department of Transportation', value: '🟢 **OPEN**' },
-                        { name: '🚔 Alaska Police Department', value: '🔴 **CLOSED**' },
-                        { name: '🚒 Alaska Fire Department', value: '🔴 **CLOSED**' },
-                        { name: '🕵️‍♂️ FBI', value: '🟢 **OPEN**' }
-                    );
+                        { name: '🚓 Alaska State Troopers', value: '🟢 **OPEN**\nStatewide law enforcement. Handles highways, rural patrol, and major incidents.', inline: false },
+                        { name: '🚧 Alaska Department of Transportation', value: '🟢 **OPEN**\nHandles traffic control, road work, and scene support.', inline: false },
+                        { name: '🚔 Alaska Police Department', value: '🔴 **CLOSED**\nCurrently in development.', inline: false },
+                        { name: '🚒 Alaska Fire Department', value: '🔴 **CLOSED**\nCurrently in development.', inline: false },
+                        { name: '🕵️‍♂️ FBI', value: '🟢 **OPEN**\nFederal investigations, special operations, high-priority cases.', inline: false }
+                    )
+                    .setFooter({ text: 'Alaska State Roleplay • Departments System' })
+                    .setTimestamp();
 
-                const menu = new StringSelectMenuBuilder()
+                const departmentDropdown = new StringSelectMenuBuilder()
                     .setCustomId('select_department')
                     .setPlaceholder('Select a department...')
-                    .addOptions([
-                        { label: 'Alaska State Troopers', value: 'ast', emoji: '🚓' },
-                        { label: 'Alaska Department of Transportation', value: 'dot', emoji: '🚧' },
-                        { label: 'Alaska Police Department', value: 'apd', emoji: '🚔', disabled: true },
-                        { label: 'Alaska Fire Department', value: 'afd', emoji: '🚒', disabled: true },
-                        { label: 'FBI', value: 'fbi', emoji: '🕵️‍♂️' }
-                    ]);
+                    .addOptions(
+                        { label: 'Alaska State Troopers', value: 'ast', description: 'Join AST server', emoji: '🚓' },
+                        { label: 'Alaska Department of Transportation', value: 'dot', description: 'Join DOT server', emoji: '🚧' },
+                        { label: 'Alaska Police Department', value: 'apd', description: 'Currently in development', emoji: '🚔', disabled: true },
+                        { label: 'Alaska Fire Department', value: 'afd', description: 'Currently in development', emoji: '🚒', disabled: true },
+                        { label: 'FBI', value: 'fbi', description: 'Join FBI server', emoji: '🕵️‍♂️' }
+                    );
 
-                await interaction.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)] });
+                const dashboardRow = new ActionRowBuilder().addComponents(departmentDropdown);
+
+                await interaction.channel.send({ embeds: [dashboardEmbed], components: [dashboardRow] });
+
                 return interaction.reply({ content: "✅ Departments dashboard deployed.", ephemeral: true });
             }
 
@@ -397,7 +414,7 @@ client.on('interactionCreate', async (interaction) => {
                 return interaction.reply({ content: `Priority updated to **${priority.toUpperCase()}**`, ephemeral: true });
             }
 
-            // /setup (example – expand as needed)
+            // /setup
             if (interaction.commandName === 'setup') {
                 const logs = interaction.options.getChannel('logs');
                 const staff = interaction.options.getRole('staff');
@@ -447,7 +464,7 @@ client.on('interactionCreate', async (interaction) => {
                 return interaction.reply({ content: `Added ${user} to ticket.`, ephemeral: true });
             }
 
-            // /ticketpersonremove (similar)
+            // /ticketpersonremove
             if (interaction.commandName === 'ticketpersonremove') {
                 const user = interaction.options.getUser('user', true);
                 const channel = interaction.channel;
@@ -470,37 +487,76 @@ client.on('interactionCreate', async (interaction) => {
         // Dashboard dropdown (everyone)
         if (interaction.isStringSelectMenu() && interaction.customId === 'asrp_dashboard') {
             const responses = {
-                staff_apps: { title: "Staff Applications", desc: "We are currently accepting applications..." },
-                ig_rules: { title: "In-Game Rules", desc: "Serious roleplay only. No RDM, VDM, powergaming..." },
-                dc_rules: { title: "Discord Rules", desc: "Respect, no toxicity, no spam..." },
-                vehicle_livery: { title: "Vehicle Livery Dashboard", desc: "All vehicles are currently **active** and deployed." }
+                staff_apps: {
+                    title: "📝 Staff Applications",
+                    desc: "**Staff Team Applications**\n\n" +
+                          "**🟢 Status: OPENED 🟢**\n\n" +
+                          "We are currently accepting applications for:\n" +
+                          "• Staff Team (Moderators, Helpers, Administrators)\n\n" +
+                          "All applications are reviewed by management. Make sure you meet the requirements listed in #「🌸」·applications before applying.\n\n" +
+                          "🔗 **Apply here:** https://your-application-link.com" // ← replace with real link
+                },
+                ig_rules: {
+                    title: "🎮 In-Game Rules (ER:LC RP Standards)",
+                    desc: "**Alaska State RolePlay • In-Game Rules**\n\n" +
+                          "These rules are in place to maintain serious, high-quality roleplay...\n\n" +
+                          "1. Serious Roleplay Only\n • No trolling, meme RP...\n" +
+                          // ... add the full text you had originally ...
+                },
+                dc_rules: {
+                    title: "📜 Discord Server Rules",
+                    desc: "**Alaska State RolePlay • Discord Rules**\n\n" +
+                          "Breaking any rule may result in warnings...\n\n" +
+                          "1. Respect & No Toxicity\n • No harassment...\n" +
+                          // ... full text ...
+                },
+                vehicle_livery: {
+                    title: "ASRP | Vehicle Livery Dashboard",
+                    desc: "All vehicles are currently **active** and deployed."
+                }
             };
 
-            const res = responses[interaction.values[0]] || { title: "Invalid", desc: "Option not found." };
+            const res = responses[interaction.values[0]];
+            if (!res) return interaction.reply({ content: "Invalid option.", ephemeral: true });
 
             const embed = new EmbedBuilder()
                 .setTitle(res.title)
                 .setDescription(res.desc)
                 .setColor(BOT_COLOR)
-                .setThumbnail(DASHBOARD_ICON);
+                .setThumbnail(DASHBOARD_ICON)
+                .setFooter({ text: "Alaska State RolePlay • Follow the rules!" });
 
             return interaction.reply({ embeds: [embed], ephemeral: true });
         }
 
         // Departments dropdown (everyone)
         if (interaction.isStringSelectMenu() && interaction.customId === 'select_department') {
-            const replies = {
-                ast: '✅ **Alaska State Troopers** is **OPEN**!\nJoin here: https://discord.gg/WhP5Xk85Yw',
-                dot: '✅ **Alaska Department of Transportation** is **OPEN**!\nJoin here: https://discord.gg/JCPDApbKmH',
-                apd: '🔴 **Alaska Police Department** is currently **CLOSED**.',
-                afd: '🔴 **Alaska Fire Department** is currently **CLOSED**.',
-                fbi: '✅ **FBI** is **OPEN**!\nJoin here: https://discord.gg/fQC227yJZT'
-            };
+            const value = interaction.values[0];
 
-            return interaction.reply({ content: replies[interaction.values[0]] || 'Unknown department.', ephemeral: true });
+            let replyText = 'Unknown department selected.';
+
+            switch (value) {
+                case 'ast':
+                    replyText = '✅ **Alaska State Troopers** is **OPEN**!\nJoin here: https://discord.gg/WhP5Xk85Yw';
+                    break;
+                case 'dot':
+                    replyText = '✅ **Alaska Department of Transportation** is **OPEN**!\nJoin here: https://discord.gg/JCPDApbKmH';
+                    break;
+                case 'apd':
+                    replyText = '🔴 **Alaska Police Department** is currently **CLOSED** / in development.';
+                    break;
+                case 'afd':
+                    replyText = '🔴 **Alaska Fire Department** is currently **CLOSED** / in development.';
+                    break;
+                case 'fbi':
+                    replyText = '✅ **FBI** is **OPEN**!\nJoin here: https://discord.gg/fQC227yJZT';
+                    break;
+            }
+
+            return interaction.reply({ content: replyText, ephemeral: true });
         }
 
-        // Ticket creation – department selection
+        // Ticket creation flow - department selection
         if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_type') {
             await interaction.deferReply({ ephemeral: true });
 
@@ -534,7 +590,7 @@ client.on('interactionCreate', async (interaction) => {
             });
         }
 
-        // Ticket creation – priority selection
+        // Ticket creation - priority selection
         if (interaction.isStringSelectMenu() && interaction.customId.startsWith('ticket_priority_')) {
             await interaction.deferUpdate();
 
@@ -604,7 +660,7 @@ client.on('interactionCreate', async (interaction) => {
             await interaction.editReply({ content: `✅ Ticket created → ${channel} (Priority: ${priority.toUpperCase()})`, ephemeral: true });
         }
 
-        // Ticket buttons: Claim
+        // Ticket buttons - Claim
         if (interaction.isButton() && interaction.customId === 'claim_ticket') {
             const channel = interaction.channel;
             const data = ticketData.get(channel.id);
@@ -634,7 +690,7 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.deferUpdate();
         }
 
-        // Ticket buttons: Close
+        // Ticket buttons - Close
         if (interaction.isButton() && interaction.customId === 'close_ticket') {
             const channel = interaction.channel;
             const data = ticketData.get(channel.id);
@@ -750,10 +806,10 @@ client.once('ready', async () => {
 
     try {
         await rest.put(
-            Routes.applicationGuildCommands(client.user.id, '1472277307002589216'),
+            Routes.applicationGuildCommands(client.user.id, GUILD_ID),
             { body: commands }
         );
-        console.log('Slash commands registered successfully to guild 1472277307002589216');
+        console.log(`Slash commands registered successfully to guild ${GUILD_ID}`);
     } catch (err) {
         console.error('Failed to register commands:', err);
     }
