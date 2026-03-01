@@ -101,7 +101,7 @@ async function sendMainDashboard(channel) {
             { label: 'Staff Applications', value: 'staff_apps', description: 'Join the ASRP team', emoji: '📝' },
             { label: 'In-Game Rules', value: 'ig_rules', description: 'ER:LC Penal Code', emoji: '🎮' },
             { label: 'Discord Rules', value: 'dc_rules', description: 'Community Guidelines', emoji: '📜' },
-            { label: 'Vehicle Livery Dashboard', value: 'vehicle_livery', description: 'View current ASRP fleet status', emoji: '🚓' },
+            // Removed: Vehicle Livery Dashboard
         ]);
 
     const menuRow = new ActionRowBuilder().addComponents(menu);
@@ -213,13 +213,49 @@ client.on('interactionCreate', async (interaction) => {
                 return;
             }
 
-            // ── Original dashboard handlers ──
+            // ── Main dashboard dropdown responses ──
             if (interaction.customId === 'asrp_dashboard') {
                 const responses = {
-                    staff_apps: { title: "📝 Staff Applications", desc: "..." /* your full text */ },
-                    ig_rules: { title: "🎮 In-Game Rules (ER:LC RP Standards)", desc: "..." },
-                    dc_rules: { title: "📜 Discord Server Rules", desc: "..." },
-                    vehicle_livery: { title: "ASRP | Vehicle Livery Status", desc: "..." }
+                    staff_apps: {
+                        title: "📝 Staff Applications",
+                        desc: "**Staff Team Applications**\n\n" +
+                              "**🟢 Status: OPENED 🟢**\n\n" +
+                              "We are currently accepting applications for:\n" +
+                              "• Staff Team (Moderators, Helpers, Administrators)\n\n" +
+                              "All applications are reviewed by management. Make sure you meet the requirements listed in #「🌸」·applications before applying.\n\n" +
+                              "🔗 **Apply here:** https://melonly.xyz/forms/7429303261795979264\n\n" +
+                              "We look forward to potentially welcoming you to the team!"
+                    },
+                    ig_rules: {
+                        title: "🎮 In-Game Rules (ER:LC RP Standards)",
+                        desc: "**Alaska State RolePlay • In-Game Rules**\n\n" +
+                              "These rules are in place to maintain serious, high-quality roleplay in Emergency Response: Liberty County.\n\n" +
+                              "1. **Serious Roleplay Only**\n • No trolling, meme RP, fail RP, or unrealistic behavior.\n • All actions must be believable in a real-world emergency/civilian context.\n\n" +
+                              "2. **Fear & New Life Rule (NLR)**\n • Value your life realistically — do not act fearless when weapons are drawn.\n • After death, you forget previous events for **15 minutes** and cannot return to the scene or seek revenge.\n\n" +
+                              "3. **No RDM / VDM**\n • Random Deathmatch (killing without valid RP reason) = severe punishment.\n • Vehicle Deathmatch (running people over without RP) = same.\n\n" +
+                              "4. **No Powergaming / Metagaming**\n • No forcing actions on others without consent.\n • No using out-of-character (OOC) information in-character.\n\n" +
+                              "5. **No Exploits, Hacks, or Glitches**\n • Any form of cheating, bug abuse, or unfair advantage = permanent ban.\n\n" +
+                              "6. **Realistic Interactions & Pursuits**\n • Proper use of radios, handcuffs, sirens, etc.\n • No cop baiting, excessive reckless driving without RP reason.\n • Criminals must commit crimes with buildup — no random mass chaos.\n\n" +
+                              "7. **Department & Job Guidelines**\n • Follow chain of command and department protocols.\n • EMS must prioritize life-saving over arrests.\n • Police must have probable cause before searches/arrests.\n\n" +
+                              "Violations → Warning → Kick → Temporary Ban → Permanent Ban (depending on severity).\nStaff decisions are final."
+                    },
+                    dc_rules: {
+                        title: "📜 Discord Server Rules",
+                        desc: "**Alaska State RolePlay • Discord Rules**\n\n" +
+                              "Breaking any rule may result in warnings, mutes, kicks, or bans depending on severity.\n\n" +
+                              "1. **Respect & No Toxicity**\n • No harassment, slurs, hate speech, bullying, or targeted attacks.\n • Zero tolerance for discrimination (race, gender, sexuality, religion, etc.).\n\n" +
+                              "2. **No NSFW / Explicit Content**\n • No pornography, gore, suggestive images/text, or links.\n • Keep the server family-friendly (Roblox community).\n\n" +
+                              "3. **No Spam / Flooding**\n • No excessive emojis, copypasta, caps spam, mention spam, or zalgo.\n • Use channels for their intended purpose.\n\n" +
+                              "4. **No Advertising / Self-Promotion**\n • No unsolicited server invites, YouTube/TikTok/Instagram promo, or DM advertising.\n • Partnerships only through official management.\n\n" +
+                              "5. **No Unnecessary Pings / Staff Abuse**\n • Do not ping @Staff, @here, @everyone without valid emergency.\n • False ticket opens or pings = punishment.\n\n" +
+                              "6. **No Drama / Public Callouts**\n • Keep personal conflicts private — no public stirring or callouts.\n • Report issues to staff privately via tickets.\n\n" +
+                              "7. **No Impersonation**\n • Do not pretend to be staff, fake ranks, or use misleading nicknames.\n\n" +
+                              "8. **Follow Roblox & Discord ToS**\n • No ban evasion, doxxing, threats, illegal content, or sharing personal information.\n\n" +
+                              "9. **English in Public Channels**\n • Main language is English — other languages allowed in appropriate or private channels.\n\n" +
+                              "10. **Staff Instructions**\n • Follow directions from staff members.\n • Arguing with staff punishments may lead to further action.\n\n" +
+                              "Use #appeals or open a ticket if you believe a punishment was unfair."
+                    }
+                    // Removed vehicle_livery entry completely
                 };
 
                 const res = responses[interaction.values[0]];
@@ -235,15 +271,26 @@ client.on('interactionCreate', async (interaction) => {
                 return interaction.reply({ embeds: [embed], ephemeral: true });
             }
 
+            // Departments dropdown
             if (interaction.customId === 'select_department') {
                 const value = interaction.values[0];
                 let replyText = 'Unknown department selected.';
                 switch (value) {
-                    case 'ast': replyText = '✅ **Alaska State Troopers** is **OPEN**!\nJoin here: https://discord.gg/WhP5Xk85Yw'; break;
-                    case 'dot': replyText = '✅ **Alaska Department of Transportation** is **OPEN**!\nJoin here: https://discord.gg/JCPDApbKmH'; break;
-                    case 'apd': replyText = '🔴 **Fairbanks Police Department** is currently **CLOSED** / in development.'; break;
-                    case 'afd': replyText = '✅ **Fairbanks Fire Department** is **OPEN**!\nJoin here: https://discord.gg/98vSGcf4XF'; break;
-                    case 'fbi': replyText = '✅ **FBI** is **OPEN**!\nJoin here: https://discord.gg/fQC227yJZT'; break;
+                    case 'ast':
+                        replyText = '✅ **Alaska State Troopers** is **OPEN**!\nJoin here: https://discord.gg/WhP5Xk85Yw';
+                        break;
+                    case 'dot':
+                        replyText = '✅ **Alaska Department of Transportation** is **OPEN**!\nJoin here: https://discord.gg/JCPDApbKmH';
+                        break;
+                    case 'apd':
+                        replyText = '🔴 **Fairbanks Police Department** is currently **CLOSED** / in development.';
+                        break;
+                    case 'afd':
+                        replyText = '✅ **Fairbanks Fire Department** is **OPEN**!\nJoin here: https://discord.gg/98vSGcf4XF';
+                        break;
+                    case 'fbi':
+                        replyText = '✅ **FBI** is **OPEN**!\nJoin here: https://discord.gg/fQC227yJZT';
+                        break;
                 }
                 return interaction.reply({ content: replyText, ephemeral: true });
             }
