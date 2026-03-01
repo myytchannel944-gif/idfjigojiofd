@@ -30,6 +30,10 @@ const TOKEN = process.env.TOKEN;
 const PORT = Number(process.env.PORT) || 3000;
 const GUILD_ID = '1472277307002589216';
 
+// Used to identify dashboard messages for deletion
+const MAIN_DASHBOARD_TITLE = "Dashboard";
+const DEPT_DASHBOARD_TITLE = "🏔️ Alaska State Roleplay";
+
 const app = express();
 app.get('/', (_, res) => res.status(200).send('ASRP bot is running'));
 app.get('/health', (_, res) => {
@@ -44,11 +48,42 @@ function isFoundership(member) {
     return member.roles.cache.has(FOUNDERSHIP_ROLE_ID);
 }
 
-// ─── Functions to send each dashboard ────────────────────────
+// ─── Helper: Clean old dashboards ───────────────────────────────
+async function cleanOldDashboards(channel, type) {
+    try {
+        const messages = await channel.messages.fetch({ limit: 50 });
+        const toDelete = [];
+
+        for (const msg of messages.values()) {
+            if (msg.author.id !== client.user.id) continue;
+
+            const embed = msg.embeds[0];
+            if (!embed) continue;
+
+            if (type === 'main' && embed.title === MAIN_DASHBOARD_TITLE) {
+                toDelete.push(msg);
+            }
+            else if (type === 'departments' && embed.title === DEPT_DASHBOARD_TITLE) {
+                toDelete.push(msg);
+            }
+        }
+
+        if (toDelete.length > 0) {
+            await channel.bulkDelete(toDelete, true).catch(() => {});
+            return toDelete.length;
+        }
+        return 0;
+    } catch (err) {
+        console.error('Error cleaning old dashboards:', err);
+        return 0;
+    }
+}
+
+// ─── Send functions ──────────────────────────────────────────────
 async function sendMainDashboard(channel) {
     const embed = new EmbedBuilder()
         .setAuthor({ name: "ALASKA STATE ROLEPLAY • OFFICIAL DIRECTORY", iconURL: DASHBOARD_ICON })
-        .setTitle("Dashboard")
+        .setTitle(MAIN_DASHBOARD_TITLE)
         .setDescription(
             "**Welcome to Alaska State RolePlay!**\n\n" +
             "Welcome to the best ER:LC roleplay community. Here you will find all of the information needed to get started.\n\n" +
@@ -75,7 +110,7 @@ async function sendMainDashboard(channel) {
 
 async function sendDepartmentsDashboard(channel) {
     const dashboardEmbed = new EmbedBuilder()
-        .setTitle('🏔️ Alaska State Roleplay')
+        .setTitle(DEPT_DASHBOARD_TITLE)
         .setDescription(
             '━━━━━━━━━━━━━━━━━━\n**Departments Dashboard**\n━━━━━━━━━━━━━━━━━━\n\n' +
             'Select a department from the dropdown to get your invite and instructions.\n\n' +
@@ -107,7 +142,7 @@ async function sendDepartmentsDashboard(channel) {
     await channel.send({ embeds: [dashboardEmbed], components: [dashboardRow] });
 }
 
-// ─── Interaction Handler ──────────────────────────────────
+// ─── Interaction Handler ────────────────────────────────────────
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand() && !interaction.isStringSelectMenu()) return;
 
@@ -121,21 +156,17 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     try {
-        // ── Slash Commands ──────────────────────────────
         if (interaction.isChatInputCommand()) {
-            // /dashboard
             if (interaction.commandName === 'dashboard') {
                 await sendMainDashboard(interaction.channel);
                 return interaction.reply({ content: "✅ Main dashboard deployed.", ephemeral: true });
             }
 
-            // /deptdashboard
             if (interaction.commandName === 'deptdashboard') {
                 await sendDepartmentsDashboard(interaction.channel);
                 return interaction.reply({ content: "✅ Departments dashboard deployed.", ephemeral: true });
             }
 
-            // /refresh – NEW
             if (interaction.commandName === 'refresh') {
                 const select = new StringSelectMenuBuilder()
                     .setCustomId('refresh_select')
@@ -148,7 +179,7 @@ client.on('interactionCreate', async (interaction) => {
                 const row = new ActionRowBuilder().addComponents(select);
 
                 await interaction.reply({
-                    content: "Select which dashboard you want to refresh:",
+                    content: "Select which dashboard you want to refresh (old one will be deleted if found):",
                     components: [row],
                     ephemeral: true
                 });
@@ -156,37 +187,39 @@ client.on('interactionCreate', async (interaction) => {
             }
         }
 
-        // ── Select Menu Handlers ──────────────────────────────
         if (interaction.isStringSelectMenu()) {
-            // Refresh selection
             if (interaction.customId === 'refresh_select') {
                 await interaction.deferUpdate();
-
                 const choice = interaction.values[0];
 
+                let deletedCount = 0;
+                let sendFn;
+
                 if (choice === 'main') {
-                    await sendMainDashboard(interaction.channel);
-                    await interaction.editReply({ content: "✅ Main dashboard refreshed.", components: [] });
+                    deletedCount = await cleanOldDashboards(interaction.channel, 'main');
+                    sendFn = sendMainDashboard;
                 } else if (choice === 'departments') {
-                    await sendDepartmentsDashboard(interaction.channel);
-                    await interaction.editReply({ content: "✅ Departments dashboard refreshed.", components: [] });
+                    deletedCount = await cleanOldDashboards(interaction.channel, 'departments');
+                    sendFn = sendDepartmentsDashboard;
                 }
+
+                await sendFn(interaction.channel);
+
+                const msg = deletedCount > 0
+                    ? `✅ Refreshed! Deleted **${deletedCount}** old dashboard message(s).`
+                    : "✅ Refreshed! (No old dashboard messages found to delete)";
+
+                await interaction.editReply({ content: msg, components: [] });
                 return;
             }
 
-            // Original dashboard dropdown
+            // ── Original dashboard handlers ──
             if (interaction.customId === 'asrp_dashboard') {
                 const responses = {
-                    staff_apps: {
-                        title: "📝 Staff Applications",
-                        desc: "**Staff Team Applications**\n\n**🟢 Status: OPENED 🟢**\n\nWe are currently accepting applications for:\n• Staff Team (Moderators, Helpers, Administrators)\n\nAll applications are reviewed by management. Make sure you meet the requirements listed in #「🌸」·applications before applying.\n\n🔗 **Apply here:** https://melonly.xyz/forms/7429303261795979264\n\nWe look forward to potentially welcoming you to the team!"
-                    },
-                    ig_rules: {
-                        title: "🎮 In-Game Rules (ER:LC RP Standards)",
-                        desc: "**Alaska State RolePlay • In-Game Rules**\n\nThese rules are in place to maintain serious, high-quality roleplay in Emergency Response: Liberty County.\n\n1. **Serious Roleplay Only** ... [rest of your rules text]" // ← keep your full text
-                    },
-                    dc_rules: { /* your full dc rules */ },
-                    vehicle_livery: { /* your full livery text */ }
+                    staff_apps: { title: "📝 Staff Applications", desc: "..." /* your full text */ },
+                    ig_rules: { title: "🎮 In-Game Rules (ER:LC RP Standards)", desc: "..." },
+                    dc_rules: { title: "📜 Discord Server Rules", desc: "..." },
+                    vehicle_livery: { title: "ASRP | Vehicle Livery Status", desc: "..." }
                 };
 
                 const res = responses[interaction.values[0]];
@@ -202,7 +235,6 @@ client.on('interactionCreate', async (interaction) => {
                 return interaction.reply({ embeds: [embed], ephemeral: true });
             }
 
-            // Departments dropdown
             if (interaction.customId === 'select_department') {
                 const value = interaction.values[0];
                 let replyText = 'Unknown department selected.';
@@ -234,15 +266,13 @@ client.once('ready', async () => {
     const commands = [
         new SlashCommandBuilder()
             .setName('dashboard')
-            .setDescription('Deploy / refresh the main community dashboard'),
-
+            .setDescription('Deploy the main community dashboard'),
         new SlashCommandBuilder()
             .setName('deptdashboard')
-            .setDescription('Deploy / refresh the departments join dashboard'),
-
+            .setDescription('Deploy the departments join dashboard'),
         new SlashCommandBuilder()
             .setName('refresh')
-            .setDescription('Refresh an existing dashboard via menu'),
+            .setDescription('Refresh a dashboard (cleans old versions)'),
     ];
 
     try {
